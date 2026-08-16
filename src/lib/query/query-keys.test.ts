@@ -1,5 +1,5 @@
-import { describe, it, expect } from "vitest";
-import { boardKeys, documentKeys, notificationKeys, userKeys, workspaceKeys } from "./query-keys";
+import { describe, expect, it } from "vitest";
+import { authKeys, boardKeys, documentKeys, notificationKeys, userKeys, workspaceKeys } from "./query-keys";
 
 describe("Query Key Factories", () => {
   it("should generate consistent workspace query keys", () => {
@@ -32,4 +32,11 @@ describe("Query Key Factories", () => {
     expect(userKeys.all).toEqual(["users"]);
     expect(userKeys.current()).toEqual(["users", "current"]);
   });
+
+  it("should generate consistent auth query keys", () => {
+    expect(authKeys.all).toEqual(["auth"]);
+    expect(authKeys.session()).toEqual(["auth", "session"]);
+    expect(authKeys.user()).toEqual(["users", "current"]);
+  });
 });
+

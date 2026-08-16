@@ -1,66 +1,67 @@
 import {
   Activity,
   Boxes,
-  CheckCircle2,
   Database,
   FileCode2,
   FolderTree,
+  KeyRound,
   Layers,
-  Radio,
   ShieldCheck,
   Zap,
 } from "lucide-react";
+
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { siteConfig } from "@/config/site";
+import { UserMenu } from "@/features/auth/components/UserMenu";
 
 const architecturePillars = [
   {
+    title: "PostgreSQL & Prisma ORM",
+    description: "Type-safe database layer with automated migrations, indexes, cascade deletions, and development seed data.",
+    icon: Database,
+    badge: "Connected",
+    badgeVariant: "success" as const,
+  },
+  {
+    title: "Secure Session Auth & Cookies",
+    description: "Database-backed sessions, bcrypt password hashing, HttpOnly secure cookies, and generic error enumeration defense.",
+    icon: KeyRound,
+    badge: "Active",
+    badgeVariant: "success" as const,
+  },
+  {
     title: "Next.js App Router & React 19",
-    description: "Server/Client component isolation, layout composition, and route groups.",
+    description: "Server/Client component isolation, layout composition, and edge-ready route protection.",
     icon: Layers,
     badge: "Active",
     badgeVariant: "success" as const,
   },
   {
     title: "TanStack Query v5 & Cache Keys",
-    description: "Hierarchical Query Key factories for structured caching and cache invalidation.",
+    description: "Hierarchical Query Key factories for structured caching and automatic authentication state synchronization.",
     icon: Zap,
     badge: "Configured",
     badgeVariant: "success" as const,
   },
   {
-    title: "Type-Safe Fail-Fast Environment",
-    description: "Strict Zod schemas isolating client and server environment configurations.",
-    icon: ShieldCheck,
-    badge: "Validated",
-    badgeVariant: "success" as const,
-  },
-  {
-    title: "Centralized API & Error Model",
+    title: "Universal API & Error Model",
     description: "Normalized HTTP client, AppError hierarchy, and standard envelope responses.",
     icon: Activity,
     badge: "Ready",
     badgeVariant: "success" as const,
   },
   {
-    title: "Domain Modules & DB Boundary",
-    description: "Dependency inversion with generic IRepository interfaces and isolated services.",
-    icon: Database,
-    badge: "Modular",
-    badgeVariant: "default" as const,
-  },
-  {
-    title: "Real-Time Event Foundation",
-    description: "Strongly-typed workspace event contracts ready for WebSockets / SSE.",
-    icon: Radio,
-    badge: "Contract Ready",
-    badgeVariant: "default" as const,
+    title: "Fail-Fast Validated Environment",
+    description: "Strict Zod schemas isolating client and server environment configurations.",
+    icon: ShieldCheck,
+    badge: "Validated",
+    badgeVariant: "success" as const,
   },
 ];
 
 const featureModules = [
-  { name: "features/auth", status: "Contracts & Schemas Ready" },
+  { name: "features/auth", status: "Database + Sessions Active" },
   { name: "features/workspace", status: "API, Hooks & Schemas Ready" },
   { name: "features/board", status: "Contracts & Schemas Ready" },
   { name: "features/document", status: "Contracts & Schemas Ready" },
@@ -79,14 +80,11 @@ export default function HomePage() {
             </div>
             <span className="text-lg font-semibold tracking-tight">{siteConfig.name}</span>
             <Badge variant="outline" className="ml-2 font-mono text-xs">
-              Phase 1: Foundation
+              Phase 2: Database & Auth
             </Badge>
           </div>
-          <div className="flex items-center space-x-3">
-            <Badge variant="success" className="flex items-center gap-1">
-              <CheckCircle2 className="h-3.5 w-3.5" />
-              Architecture Initialized
-            </Badge>
+          <div className="flex items-center space-x-4">
+            <UserMenu />
           </div>
         </div>
       </header>
@@ -97,15 +95,15 @@ export default function HomePage() {
         <section className="space-y-4">
           <div className="inline-flex items-center gap-2 rounded-full border bg-muted/50 px-3 py-1 text-xs text-muted-foreground">
             <Boxes className="h-3.5 w-3.5 text-primary" />
-            Week 1: Architecture & Project Setup
+            Week 2: Database + Authentication
           </div>
           <h1 className="text-3xl font-bold tracking-tight text-foreground sm:text-4xl">
             Collaborative Real-Time Workspace Foundation
           </h1>
           <p className="max-w-3xl text-base leading-relaxed text-muted-foreground sm:text-lg">
-            A production-grade, modular foundation built with Next.js App Router, Tailwind CSS,
-            TanStack Query, strict TypeScript, and fail-fast environment validation. Designed for
-            seamless real-time expansion without architectural rewrites.
+            A production-grade, modular foundation built with Next.js App Router, PostgreSQL, Prisma
+            ORM, secure session authentication, Tailwind CSS, TanStack Query, strict TypeScript,
+            and fail-fast environment validation.
           </p>
         </section>
 
@@ -184,28 +182,24 @@ export default function HomePage() {
                   <p className="mt-0.5 font-sans text-xs text-muted-foreground">Start dev server</p>
                 </div>
                 <div className="rounded-md border bg-muted/40 p-2.5">
+                  <p className="font-semibold text-foreground">npm run db:migrate</p>
+                  <p className="mt-0.5 font-sans text-xs text-muted-foreground">Run DB migrations</p>
+                </div>
+                <div className="rounded-md border bg-muted/40 p-2.5">
+                  <p className="font-semibold text-foreground">npm run db:seed</p>
+                  <p className="mt-0.5 font-sans text-xs text-muted-foreground">Seed dev data</p>
+                </div>
+                <div className="rounded-md border bg-muted/40 p-2.5">
                   <p className="font-semibold text-foreground">npm run typecheck</p>
                   <p className="mt-0.5 font-sans text-xs text-muted-foreground">Strict TS check</p>
                 </div>
                 <div className="rounded-md border bg-muted/40 p-2.5">
                   <p className="font-semibold text-foreground">npm run test</p>
-                  <p className="mt-0.5 font-sans text-xs text-muted-foreground">
-                    Vitest test suite
-                  </p>
+                  <p className="mt-0.5 font-sans text-xs text-muted-foreground">Vitest test suite</p>
                 </div>
                 <div className="rounded-md border bg-muted/40 p-2.5">
                   <p className="font-semibold text-foreground">npm run build</p>
                   <p className="mt-0.5 font-sans text-xs text-muted-foreground">Production build</p>
-                </div>
-                <div className="rounded-md border bg-muted/40 p-2.5">
-                  <p className="font-semibold text-foreground">npm run lint</p>
-                  <p className="mt-0.5 font-sans text-xs text-muted-foreground">ESLint checks</p>
-                </div>
-                <div className="rounded-md border bg-muted/40 p-2.5">
-                  <p className="font-semibold text-foreground">npm run format</p>
-                  <p className="mt-0.5 font-sans text-xs text-muted-foreground">
-                    Prettier formatter
-                  </p>
                 </div>
               </div>
             </CardContent>

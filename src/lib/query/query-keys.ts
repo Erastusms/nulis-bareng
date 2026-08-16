@@ -40,3 +40,9 @@ export const userKeys = {
   current: () => [...userKeys.all, "current"] as const,
   profile: (id: string) => [...userKeys.all, "profile", id] as const,
 };
+
+export const authKeys = {
+  all: ["auth"] as const,
+  session: () => [...authKeys.all, "session"] as const,
+  user: () => userKeys.current(),
+};
