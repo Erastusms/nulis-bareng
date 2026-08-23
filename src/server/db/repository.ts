@@ -1,4 +1,4 @@
-import type { WorkspaceRole } from "@/types/domain";
+import type { User, WorkspaceRole } from "@/types/domain";
 
 /**
  * Internal persistence representation of User containing the password hash.
@@ -121,6 +121,100 @@ export interface CreateWorkspaceInvitationData {
   expiresAt: Date;
 }
 
+// Kanban Core Domain Records & DTOs
+
+export interface BoardRecord {
+  id: string;
+  workspaceId: string;
+  title: string;
+  description: string | null;
+  position: number;
+  createdAt: Date;
+  updatedAt: Date;
+  columns?: BoardColumnRecord[];
+  cards?: CardRecord[];
+}
+
+export interface CreateBoardData {
+  workspaceId: string;
+  title: string;
+  description?: string | null;
+  position?: number;
+}
+
+export interface UpdateBoardData {
+  title?: string;
+  description?: string | null;
+  position?: number;
+}
+
+export interface BoardColumnRecord {
+  id: string;
+  boardId: string;
+  title: string;
+  position: number;
+  color: string | null;
+  createdAt: Date;
+  updatedAt: Date;
+  cards?: CardRecord[];
+}
+
+export interface CreateBoardColumnData {
+  boardId: string;
+  title: string;
+  position?: number;
+  color?: string | null;
+}
+
+export interface UpdateBoardColumnData {
+  title?: string;
+  position?: number;
+  color?: string | null;
+}
+
+export interface CardRecord {
+  id: string;
+  columnId: string;
+  boardId: string;
+  title: string;
+  description: string | null;
+  position: number;
+  dueDate: Date | null;
+  labels: string[];
+  assigneeIds: string[];
+  assignees?: User[];
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export interface CreateCardData {
+  columnId: string;
+  boardId: string;
+  title: string;
+  description?: string | null;
+  position?: number;
+  dueDate?: Date | null;
+  labels?: string[];
+  assigneeIds?: string[];
+}
+
+export interface UpdateCardData {
+  title?: string;
+  description?: string | null;
+  columnId?: string;
+  position?: number;
+  dueDate?: Date | null;
+  labels?: string[];
+  assigneeIds?: string[];
+}
+
+export interface MoveCardData {
+  cardId: string;
+  sourceColumnId: string;
+  targetColumnId: string;
+  targetPosition: number;
+}
+
 /**
  * Generic Repository Interface to isolate database persistence from domain logic.
  */
@@ -186,3 +280,31 @@ export interface IWorkspaceInvitationRepository {
   delete(id: string): Promise<boolean>;
 }
 
+export interface IBoardRepository {
+  findById(id: string): Promise<BoardRecord | null>;
+  findWithDetails(id: string): Promise<BoardRecord | null>;
+  findByWorkspaceId(workspaceId: string): Promise<BoardRecord[]>;
+  create(data: CreateBoardData): Promise<BoardRecord>;
+  update(id: string, data: UpdateBoardData): Promise<BoardRecord>;
+  delete(id: string): Promise<boolean>;
+  countByWorkspaceId(workspaceId: string): Promise<number>;
+}
+
+export interface IBoardColumnRepository {
+  findById(id: string): Promise<BoardColumnRecord | null>;
+  findByBoardId(boardId: string): Promise<BoardColumnRecord[]>;
+  create(data: CreateBoardColumnData): Promise<BoardColumnRecord>;
+  update(id: string, data: UpdateBoardColumnData): Promise<BoardColumnRecord>;
+  delete(id: string): Promise<boolean>;
+  reorderColumns(boardId: string, orderedColumnIds: string[]): Promise<BoardColumnRecord[]>;
+}
+
+export interface ICardRepository {
+  findById(id: string): Promise<CardRecord | null>;
+  findByColumnId(columnId: string): Promise<CardRecord[]>;
+  findByBoardId(boardId: string): Promise<CardRecord[]>;
+  create(data: CreateCardData): Promise<CardRecord>;
+  update(id: string, data: UpdateCardData): Promise<CardRecord>;
+  delete(id: string): Promise<boolean>;
+  moveCard(data: MoveCardData): Promise<CardRecord>;
+}

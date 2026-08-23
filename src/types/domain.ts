@@ -67,6 +67,8 @@ export interface Board {
   title: string;
   description?: string | null;
   position: number;
+  columns?: BoardColumn[];
+  cards?: Card[];
   createdAt: Timestamp;
   updatedAt: Timestamp;
 }
@@ -77,6 +79,7 @@ export interface BoardColumn {
   title: string;
   position: number;
   color?: string | null;
+  cards?: Card[];
   createdAt: Timestamp;
   updatedAt: Timestamp;
 }
@@ -90,6 +93,7 @@ export interface Card {
   position: number;
   dueDate?: Timestamp | null;
   assigneeIds: EntityId[];
+  assignees?: User[];
   labels: string[];
   createdAt: Timestamp;
   updatedAt: Timestamp;

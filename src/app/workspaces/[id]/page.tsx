@@ -7,6 +7,7 @@ import { ArrowRight, FileText, Kanban, ShieldCheck, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useBoards } from "@/features/board/hooks/use-boards";
 import { useWorkspace } from "@/features/workspace/hooks/use-workspaces";
 import { useWorkspaceMembers } from "@/features/workspace/hooks/use-workspace-members";
 
@@ -16,6 +17,7 @@ export default function WorkspaceOverviewPage() {
 
   const { data: workspace, isLoading: isWsLoading, error: wsError } = useWorkspace(workspaceId);
   const { data: members, isLoading: isMembersLoading } = useWorkspaceMembers(workspaceId);
+  const { data: boards, isLoading: isBoardsLoading } = useBoards(workspaceId);
 
   if (isWsLoading) {
     return (
@@ -79,7 +81,7 @@ export default function WorkspaceOverviewPage() {
           </CardContent>
         </Card>
 
-        {/* Boards Placeholder */}
+        {/* Boards Module */}
         <Card className="transition-all hover:border-primary/50">
           <CardHeader className="space-y-1 pb-3">
             <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
@@ -87,14 +89,18 @@ export default function WorkspaceOverviewPage() {
             </div>
             <CardTitle className="text-base pt-2">Kanban Boards</CardTitle>
             <CardDescription className="text-xs">
-              Phase 4: Drag & Drop Kanban boards with columns and cards.
+              {isBoardsLoading
+                ? "Loading boards..."
+                : `${boards?.length || 0} active boards with drag & drop workflows`}
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <Button variant="outline" size="sm" disabled className="w-full justify-between gap-1 text-xs">
-              <span>Coming in Phase 4</span>
-              <ArrowRight className="h-3.5 w-3.5" />
-            </Button>
+            <Link href={`/workspaces/${workspaceId}/boards`}>
+              <Button variant="outline" size="sm" className="w-full justify-between gap-1 text-xs">
+                <span>View Boards</span>
+                <ArrowRight className="h-3.5 w-3.5" />
+              </Button>
+            </Link>
           </CardContent>
         </Card>
 

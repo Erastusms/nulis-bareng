@@ -5,6 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   ChevronLeft,
+  Kanban,
   LayoutDashboard,
   Settings,
   Shield,
@@ -61,10 +62,16 @@ export function WorkspaceHeader({ workspaceId }: WorkspaceHeaderProps) {
       active: pathname === `/workspaces/${workspaceId}`,
     },
     {
+      name: "Boards",
+      href: `/workspaces/${workspaceId}/boards`,
+      icon: Kanban,
+      active: pathname.startsWith(`/workspaces/${workspaceId}/boards`),
+    },
+    {
       name: "Members",
       href: `/workspaces/${workspaceId}/members`,
       icon: Users,
-      active: pathname === `/workspaces/${workspaceId}/members`,
+      active: pathname.startsWith(`/workspaces/${workspaceId}/members`),
     },
     ...(canManage
       ? [
@@ -72,7 +79,7 @@ export function WorkspaceHeader({ workspaceId }: WorkspaceHeaderProps) {
             name: "Settings",
             href: `/workspaces/${workspaceId}/settings`,
             icon: Settings,
-            active: pathname === `/workspaces/${workspaceId}/settings`,
+            active: pathname.startsWith(`/workspaces/${workspaceId}/settings`),
           },
         ]
       : []),

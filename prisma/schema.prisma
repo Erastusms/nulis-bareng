@@ -21,6 +21,7 @@ model User {
   ownedWorkspaces  Workspace[]           @relation("WorkspaceOwner")
   workspaceMembers WorkspaceMember[]
   sentInvitations  WorkspaceInvitation[] @relation("SentInvitations")
+  cardAssignments  CardAssignee[]
 
   @@index([email])
   @@map("users")
@@ -66,6 +67,7 @@ model Workspace {
   owner         User                  @relation("WorkspaceOwner", fields: [ownerId], references: [id], onDelete: Cascade)
   members       WorkspaceMember[]
   invitations   WorkspaceInvitation[]
+  boards        Board[]
 
   @@index([ownerId])
   @@index([slug])
@@ -111,3 +113,71 @@ model WorkspaceInvitation {
   @@map("workspace_invitations")
 }
 
+model Board {
+  id          String        @id @default(cuid())
+  workspaceId String        @map("workspace_id")
+  title       String
+  description String?
+  position    Int           @default(0)
+  createdAt   DateTime      @default(now()) @map("created_at")
+  updatedAt   DateTime      @updatedAt @map("updated_at")
+
+  workspace   Workspace     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  columns     BoardColumn[]
+  cards       Card[]
+
+  @@index([workspaceId])
+  @@map("boards")
+}
+
+model BoardColumn {
+  id        String   @id @default(cuid())
+  boardId   String   @map("board_id")
+  title     String
+  position  Int      @default(0)
+  color     String?
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  board     Board    @relation(fields: [boardId], references: [id], onDelete: Cascade)
+  cards     Card[]
+
+  @@index([boardId])
+  @@map("board_columns")
+}
+
+model Card {
+  id          String         @id @default(cuid())
+  columnId    String         @map("column_id")
+  boardId     String         @map("board_id")
+  title       String
+  description String?
+  position    Int            @default(0)
+  dueDate     DateTime?      @map("due_date")
+  labels      String[]       @default([])
+  createdAt   DateTime       @default(now()) @map("created_at")
+  updatedAt   DateTime       @updatedAt @map("updated_at")
+
+  column      BoardColumn    @relation(fields: [columnId], references: [id], onDelete: Cascade)
+  board       Board          @relation(fields: [boardId], references: [id], onDelete: Cascade)
+  assignees   CardAssignee[]
+
+  @@index([columnId])
+  @@index([boardId])
+  @@map("cards")
+}
+
+model CardAssignee {
+  id        String   @id @default(cuid())
+  cardId    String   @map("card_id")
+  userId    String   @map("user_id")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  card      Card     @relation(fields: [cardId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([cardId, userId])
+  @@index([cardId])
+  @@index([userId])
+  @@map("card_assignees")
+}
