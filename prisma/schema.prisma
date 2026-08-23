@@ -17,7 +17,10 @@ model User {
   createdAt     DateTime  @default(now()) @map("created_at")
   updatedAt     DateTime  @updatedAt @map("updated_at")
 
-  sessions      Session[]
+  sessions         Session[]
+  ownedWorkspaces  Workspace[]           @relation("WorkspaceOwner")
+  workspaceMembers WorkspaceMember[]
+  sentInvitations  WorkspaceInvitation[] @relation("SentInvitations")
 
   @@index([email])
   @@map("users")
@@ -36,3 +39,75 @@ model Session {
   @@index([sessionToken])
   @@map("sessions")
 }
+
+enum WorkspaceRole {
+  OWNER
+  ADMIN
+  MEMBER
+}
+
+enum InvitationStatus {
+  PENDING
+  ACCEPTED
+  REJECTED
+  EXPIRED
+}
+
+model Workspace {
+  id            String                @id @default(cuid())
+  name          String
+  slug          String
+  urlIdentifier String                @unique @map("url_identifier")
+  description   String?
+  ownerId       String                @map("owner_id")
+  createdAt     DateTime              @default(now()) @map("created_at")
+  updatedAt     DateTime              @updatedAt @map("updated_at")
+
+  owner         User                  @relation("WorkspaceOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+  members       WorkspaceMember[]
+  invitations   WorkspaceInvitation[]
+
+  @@index([ownerId])
+  @@index([slug])
+  @@index([urlIdentifier])
+  @@map("workspaces")
+}
+
+model WorkspaceMember {
+  id          String        @id @default(cuid())
+  workspaceId String        @map("workspace_id")
+  userId      String        @map("user_id")
+  role        WorkspaceRole @default(MEMBER)
+  createdAt   DateTime      @default(now()) @map("created_at")
+  updatedAt   DateTime      @updatedAt @map("updated_at")
+
+  workspace   Workspace     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  user        User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, userId])
+  @@index([workspaceId])
+  @@index([userId])
+  @@map("workspace_members")
+}
+
+model WorkspaceInvitation {
+  id          String           @id @default(cuid())
+  workspaceId String           @map("workspace_id")
+  email       String
+  role        WorkspaceRole    @default(MEMBER)
+  token       String           @unique
+  status      InvitationStatus @default(PENDING)
+  inviterId   String           @map("inviter_id")
+  expiresAt   DateTime         @map("expires_at")
+  createdAt   DateTime         @default(now()) @map("created_at")
+  updatedAt   DateTime         @updatedAt @map("updated_at")
+
+  workspace   Workspace        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  inviter     User             @relation("SentInvitations", fields: [inviterId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId])
+  @@index([email])
+  @@index([token])
+  @@map("workspace_invitations")
+}
+

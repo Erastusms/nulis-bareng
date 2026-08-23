@@ -8,7 +8,17 @@ export const serverEnvSchema = z.object({
   DATABASE_URL: z.string().min(1, "DATABASE_URL is required"),
   AUTH_SECRET: z.string().min(16, "AUTH_SECRET must be at least 16 characters long"),
   AUTH_URL: z.string().url().optional(),
+  APP_URL: z.string().url().optional(),
   LOG_LEVEL: z.enum(["debug", "info", "warn", "error"]).default("info"),
+  INVITATION_EMAIL_FROM: z.string().min(1).default("NulisBareng <no-reply@example.com>"),
+  SMTP_HOST: z.string().default("localhost"),
+  SMTP_PORT: z.coerce.number().default(1025),
+  SMTP_USER: z.string().optional(),
+  SMTP_PASSWORD: z.string().optional(),
+  SMTP_SECURE: z
+    .string()
+    .transform((val) => val === "true")
+    .default("false"),
 });
 
 /**
@@ -34,7 +44,8 @@ export function validateEnv(isServerOverride?: boolean): ClientEnv & ServerEnv {
 
   const clientParsed = clientEnvSchema.safeParse({
     NEXT_PUBLIC_APP_NAME: process.env.NEXT_PUBLIC_APP_NAME,
-    NEXT_PUBLIC_APP_URL: process.env.NEXT_PUBLIC_APP_URL,
+    NEXT_PUBLIC_APP_URL:
+      process.env.NEXT_PUBLIC_APP_URL || process.env.APP_URL || "http://localhost:3000",
     NEXT_PUBLIC_API_URL: process.env.NEXT_PUBLIC_API_URL,
     NEXT_PUBLIC_ENABLE_REALTIME: process.env.NEXT_PUBLIC_ENABLE_REALTIME,
   });
@@ -53,7 +64,14 @@ export function validateEnv(isServerOverride?: boolean): ClientEnv & ServerEnv {
       DATABASE_URL: process.env.DATABASE_URL,
       AUTH_SECRET: process.env.AUTH_SECRET,
       AUTH_URL: process.env.AUTH_URL,
+      APP_URL: process.env.APP_URL || process.env.NEXT_PUBLIC_APP_URL,
       LOG_LEVEL: process.env.LOG_LEVEL,
+      INVITATION_EMAIL_FROM: process.env.INVITATION_EMAIL_FROM,
+      SMTP_HOST: process.env.SMTP_HOST,
+      SMTP_PORT: process.env.SMTP_PORT,
+      SMTP_USER: process.env.SMTP_USER,
+      SMTP_PASSWORD: process.env.SMTP_PASSWORD,
+      SMTP_SECURE: process.env.SMTP_SECURE,
     });
 
     if (!serverParsed.success) {
@@ -77,6 +95,12 @@ export function validateEnv(isServerOverride?: boolean): ClientEnv & ServerEnv {
     DATABASE_URL: "",
     AUTH_SECRET: "",
     LOG_LEVEL: "info",
+    INVITATION_EMAIL_FROM: "NulisBareng <no-reply@example.com>",
+    SMTP_HOST: "localhost",
+    SMTP_PORT: 1025,
+    SMTP_USER: undefined,
+    SMTP_PASSWORD: undefined,
+    SMTP_SECURE: false,
   };
 }
 

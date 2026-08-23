@@ -1,4 +1,4 @@
-import type { Workspace as DomainWorkspace } from "@/types/domain";
+import type { WorkspaceRole } from "@/types/domain";
 
 /**
  * Internal persistence representation of User containing the password hash.
@@ -36,6 +36,91 @@ export interface CreateSessionData {
   expiresAt: Date;
 }
 
+export interface WorkspaceRecord {
+  id: string;
+  name: string;
+  slug: string;
+  urlIdentifier: string;
+  description: string | null;
+  ownerId: string;
+  createdAt: Date;
+  updatedAt: Date;
+  role?: WorkspaceRole;
+  memberCount?: number;
+}
+
+export interface CreateWorkspaceData {
+  name: string;
+  slug: string;
+  urlIdentifier: string;
+  description?: string | null;
+  ownerId: string;
+}
+
+export interface UpdateWorkspaceData {
+  name?: string;
+  slug?: string;
+  urlIdentifier?: string;
+  description?: string | null;
+}
+
+export interface WorkspaceMemberRecord {
+  id: string;
+  workspaceId: string;
+  userId: string;
+  role: WorkspaceRole;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export interface WorkspaceMemberWithUserRecord extends WorkspaceMemberRecord {
+  user: {
+    id: string;
+    name: string;
+    email: string;
+    avatarUrl: string | null;
+    createdAt: Date;
+  };
+}
+
+export interface CreateWorkspaceMemberData {
+  workspaceId: string;
+  userId: string;
+  role?: WorkspaceRole;
+}
+
+export interface WorkspaceInvitationRecord {
+  id: string;
+  workspaceId: string;
+  email: string;
+  role: WorkspaceRole;
+  token: string;
+  status: "PENDING" | "ACCEPTED" | "REJECTED" | "EXPIRED";
+  inviterId: string;
+  expiresAt: Date;
+  createdAt: Date;
+  updatedAt: Date;
+  inviter?: {
+    id: string;
+    name: string;
+    email: string;
+  };
+  workspace?: {
+    id: string;
+    name: string;
+    slug: string;
+  };
+}
+
+export interface CreateWorkspaceInvitationData {
+  workspaceId: string;
+  email: string;
+  role: WorkspaceRole;
+  token: string;
+  inviterId: string;
+  expiresAt: Date;
+}
+
 /**
  * Generic Repository Interface to isolate database persistence from domain logic.
  */
@@ -63,7 +148,41 @@ export interface ISessionRepository {
   deleteExpired(): Promise<number>;
 }
 
-export interface IWorkspaceRepository extends IRepository<DomainWorkspace> {
-  findBySlug(slug: string): Promise<DomainWorkspace | null>;
-  findByOwnerId(ownerId: string): Promise<DomainWorkspace[]>;
+export interface IWorkspaceRepository {
+  findById(id: string): Promise<WorkspaceRecord | null>;
+  findBySlug(slug: string): Promise<WorkspaceRecord | null>;
+  findByUrlIdentifier(urlIdentifier: string): Promise<WorkspaceRecord | null>;
+  findByIdOrUrlIdentifier(identifier: string): Promise<WorkspaceRecord | null>;
+  findByUserId(userId: string): Promise<(WorkspaceRecord & { role: WorkspaceRole })[]>;
+  createWithOwner(data: CreateWorkspaceData): Promise<WorkspaceRecord>;
+  update(id: string, data: UpdateWorkspaceData): Promise<WorkspaceRecord>;
+  delete(id: string): Promise<boolean>;
 }
+
+export interface IWorkspaceMemberRepository {
+  findByWorkspaceAndUser(workspaceId: string, userId: string): Promise<WorkspaceMemberRecord | null>;
+  findMembersByWorkspaceId(workspaceId: string): Promise<WorkspaceMemberWithUserRecord[]>;
+  create(data: CreateWorkspaceMemberData): Promise<WorkspaceMemberRecord>;
+  updateRole(workspaceId: string, userId: string, role: WorkspaceRole): Promise<WorkspaceMemberRecord>;
+  delete(workspaceId: string, userId: string): Promise<boolean>;
+  countByWorkspaceId(workspaceId: string): Promise<number>;
+}
+
+export interface IWorkspaceInvitationRepository {
+  create(data: CreateWorkspaceInvitationData): Promise<WorkspaceInvitationRecord>;
+  findByToken(token: string): Promise<WorkspaceInvitationRecord | null>;
+  findByWorkspaceAndEmail(workspaceId: string, email: string): Promise<WorkspaceInvitationRecord | null>;
+  findPendingByWorkspaceId(workspaceId: string): Promise<WorkspaceInvitationRecord[]>;
+  updateStatus(
+    id: string,
+    status: "PENDING" | "ACCEPTED" | "REJECTED" | "EXPIRED"
+  ): Promise<WorkspaceInvitationRecord>;
+  acceptTransactionally(
+    invitationId: string,
+    workspaceId: string,
+    userId: string,
+    role: WorkspaceRole
+  ): Promise<void>;
+  delete(id: string): Promise<boolean>;
+}
+

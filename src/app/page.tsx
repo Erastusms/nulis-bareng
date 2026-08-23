@@ -10,7 +10,9 @@ import {
   Zap,
 } from "lucide-react";
 
+import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { siteConfig } from "@/config/site";
 import { UserMenu } from "@/features/auth/components/UserMenu";
@@ -80,10 +82,16 @@ export default function HomePage() {
             </div>
             <span className="text-lg font-semibold tracking-tight">{siteConfig.name}</span>
             <Badge variant="outline" className="ml-2 font-mono text-xs">
-              Phase 2: Database & Auth
+              Phase 3: Workspaces & RBAC
             </Badge>
           </div>
           <div className="flex items-center space-x-4">
+            <Link href="/workspaces">
+              <Button size="sm" variant="default" className="gap-1.5">
+                <Boxes className="h-4 w-4" />
+                <span>Workspaces</span>
+              </Button>
+            </Link>
             <UserMenu />
           </div>
         </div>
@@ -95,16 +103,24 @@ export default function HomePage() {
         <section className="space-y-4">
           <div className="inline-flex items-center gap-2 rounded-full border bg-muted/50 px-3 py-1 text-xs text-muted-foreground">
             <Boxes className="h-3.5 w-3.5 text-primary" />
-            Week 2: Database + Authentication
+            Phase 3: Workspace & RBAC System
           </div>
           <h1 className="text-3xl font-bold tracking-tight text-foreground sm:text-4xl">
-            Collaborative Real-Time Workspace Foundation
+            Collaborative Real-Time Workspace & RBAC
           </h1>
           <p className="max-w-3xl text-base leading-relaxed text-muted-foreground sm:text-lg">
             A production-grade, modular foundation built with Next.js App Router, PostgreSQL, Prisma
-            ORM, secure session authentication, Tailwind CSS, TanStack Query, strict TypeScript,
-            and fail-fast environment validation.
+            ORM, secure session authentication, centralized RBAC authorization, Tailwind CSS, TanStack Query,
+            and strict TypeScript.
           </p>
+          <div className="pt-2">
+            <Link href="/workspaces">
+              <Button size="lg" className="gap-2">
+                <Boxes className="h-5 w-5" />
+                <span>Go to Workspaces Dashboard</span>
+              </Button>
+            </Link>
+          </div>
         </section>
 
         {/* Architectural Pillars */}

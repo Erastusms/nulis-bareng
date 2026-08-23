@@ -25,6 +25,16 @@ function createWrapper() {
 }
 
 
+const mockPush = vi.fn();
+const mockRefresh = vi.fn();
+
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({
+    push: mockPush,
+    refresh: mockRefresh,
+  }),
+}));
+
 describe("Authentication Hooks (use-auth.ts)", () => {
   const mockUser = {
     id: "user_1",
@@ -37,6 +47,8 @@ describe("Authentication Hooks (use-auth.ts)", () => {
 
   beforeEach(() => {
     vi.restoreAllMocks();
+    mockPush.mockClear();
+    mockRefresh.mockClear();
   });
 
   describe("useCurrentUser", () => {
@@ -111,6 +123,7 @@ describe("Authentication Hooks (use-auth.ts)", () => {
 
       await waitFor(() => expect(result.current.isSuccess).toBe(true));
       expect(result.current.data).toEqual({ message: "Logged out successfully." });
+      expect(mockPush).toHaveBeenCalledWith("/home");
     });
   });
 });

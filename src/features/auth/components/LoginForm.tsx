@@ -15,13 +15,22 @@ import {
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { AppError } from "@/lib/api/errors";
+import { getSafeReturnUrl } from "@/lib/utils";
 import { useLogin } from "../hooks/use-auth";
 import { loginSchema } from "../schemas/auth.schema";
 
 export function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const redirectTo = searchParams.get("from") || "/";
+  const rawFrom =
+    searchParams.get("from") ||
+    searchParams.get("returnTo") ||
+    searchParams.get("callbackUrl");
+  const redirectTo = getSafeReturnUrl(rawFrom, "/");
+  const registerHref =
+    rawFrom && redirectTo !== "/"
+      ? `/register?from=${encodeURIComponent(redirectTo)}`
+      : "/register";
 
   const [email, setEmail] = React.useState("");
   const [password, setPassword] = React.useState("");
@@ -134,7 +143,7 @@ export function LoginForm() {
           <p className="text-center text-sm text-muted-foreground">
             Don&apos;t have an account?{" "}
             <Link
-              href="/register"
+              href={registerHref}
               className="font-medium text-primary underline-offset-4 hover:underline"
             >
               Create account

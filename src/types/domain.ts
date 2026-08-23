@@ -6,7 +6,15 @@ export type EntityId = string;
 
 export type Timestamp = string; // ISO 8601 string
 
-export type WorkspaceRole = "owner" | "admin" | "member" | "viewer";
+export type WorkspaceRole =
+  | "OWNER"
+  | "ADMIN"
+  | "MEMBER"
+  | "VIEWER"
+  | "owner"
+  | "admin"
+  | "member"
+  | "viewer";
 
 export interface User {
   id: EntityId;
@@ -21,8 +29,12 @@ export interface Workspace {
   id: EntityId;
   name: string;
   slug: string;
+  urlIdentifier: string;
   description?: string | null;
   ownerId: EntityId;
+  role?: WorkspaceRole;
+  currentUserRole?: WorkspaceRole;
+  memberCount?: number;
   createdAt: Timestamp;
   updatedAt: Timestamp;
 }
@@ -34,6 +46,19 @@ export interface WorkspaceMember {
   role: WorkspaceRole;
   user?: User;
   joinedAt: Timestamp;
+}
+
+export interface WorkspaceInvitation {
+  id: EntityId;
+  workspaceId: EntityId;
+  email: string;
+  role: WorkspaceRole;
+  token: string;
+  status: "PENDING" | "ACCEPTED" | "REJECTED" | "EXPIRED";
+  inviterId: EntityId;
+  inviter?: User;
+  expiresAt: Timestamp;
+  createdAt: Timestamp;
 }
 
 export interface Board {

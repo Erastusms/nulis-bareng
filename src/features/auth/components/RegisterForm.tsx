@@ -2,17 +2,28 @@
 
 import * as React from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { AlertCircle, Lock, Mail, User as UserIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { AppError } from "@/lib/api/errors";
+import { getSafeReturnUrl } from "@/lib/utils";
 import { useRegister } from "../hooks/use-auth";
 import { registerFormSchema } from "../schemas/auth.schema";
 
 export function RegisterForm() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const rawFrom =
+    searchParams.get("from") ||
+    searchParams.get("returnTo") ||
+    searchParams.get("callbackUrl");
+  const redirectTo = getSafeReturnUrl(rawFrom, "/");
+  const loginHref =
+    rawFrom && redirectTo !== "/"
+      ? `/login?from=${encodeURIComponent(redirectTo)}`
+      : "/login";
 
   const [name, setName] = React.useState("");
   const [email, setEmail] = React.useState("");
@@ -57,7 +68,7 @@ export function RegisterForm() {
         email: validationResult.data.email,
         password: validationResult.data.password,
       });
-      router.push("/");
+      router.push(redirectTo);
       router.refresh();
     } catch (error) {
       if (error instanceof AppError) {
@@ -198,7 +209,7 @@ export function RegisterForm() {
           <p className="text-center text-sm text-muted-foreground">
             Already have an account?{" "}
             <Link
-              href="/login"
+              href={loginHref}
               className="font-medium text-primary hover:underline underline-offset-4"
             >
               Sign in

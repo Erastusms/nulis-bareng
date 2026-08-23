@@ -1,3 +1,4 @@
+import { useRouter } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { userKeys } from "@/lib/query/query-keys";
 import type { User } from "@/types/domain";
@@ -51,15 +52,19 @@ export function useRegister() {
 
 /**
  * Mutation hook for user logout.
+ * Always terminates session, clears cache, and redirects to /home.
  */
 export function useLogout() {
   const queryClient = useQueryClient();
+  const router = useRouter();
 
   return useMutation({
     mutationFn: logoutUser,
     onSuccess: () => {
       queryClient.setQueryData(userKeys.current(), null);
       queryClient.clear();
+      router.push("/home");
+      router.refresh();
     },
   });
 }
