@@ -1,6 +1,8 @@
 import { NotFoundError } from "@/lib/api/errors";
+import { createEventId, createVersion } from "@/lib/realtime/events";
 import { boardRepository } from "@/server/db/repositories/board.repository";
 import type { BoardRecord, IBoardRepository } from "@/server/db/repository";
+import { eventPublisher, IEventPublisher } from "@/server/websocket/event-publisher";
 import { boardAuth, BoardAuthorizationService } from "./board-authorization";
 import type { Board } from "@/types/domain";
 
@@ -53,7 +55,8 @@ function toDomainBoard(record: BoardRecord): Board {
 export class BoardService {
   constructor(
     private readonly boardRepo: IBoardRepository = boardRepository,
-    private readonly authService: BoardAuthorizationService = boardAuth
+    private readonly authService: BoardAuthorizationService = boardAuth,
+    private readonly publisher: IEventPublisher = eventPublisher
   ) {}
 
   /**
@@ -121,7 +124,7 @@ export class BoardService {
     userId: string,
     dto: UpdateBoardDTO
   ): Promise<Board> {
-    await this.authService.requireBoardInWorkspace(
+    const { workspace } = await this.authService.requireBoardInWorkspace(
       boardId,
       workspaceIdOrIdentifier,
       userId
@@ -133,7 +136,23 @@ export class BoardService {
       position: dto.position,
     });
 
-    return toDomainBoard(updated);
+    const domainBoard = toDomainBoard(updated);
+
+    await this.publisher.publish({
+      eventId: createEventId(),
+      type: "board.updated",
+      workspaceId: workspace.id,
+      boardId: domainBoard.id,
+      changes: {
+        title: dto.title?.trim(),
+        description: dto.description !== undefined ? dto.description?.trim() ?? null : undefined,
+        position: dto.position,
+      },
+      version: createVersion(),
+      timestamp: new Date().toISOString(),
+    });
+
+    return domainBoard;
   }
 
   /**

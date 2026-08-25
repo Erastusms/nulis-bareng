@@ -1,9 +1,11 @@
 import { ValidationError } from "@/lib/api/errors";
+import { createEventId, createVersion } from "@/lib/realtime/events";
 import { boardColumnRepository } from "@/server/db/repositories/board-column.repository";
 import type {
   BoardColumnRecord,
   IBoardColumnRepository,
 } from "@/server/db/repository";
+import { eventPublisher, IEventPublisher } from "@/server/websocket/event-publisher";
 import { boardAuth, BoardAuthorizationService } from "./board-authorization";
 import type { BoardColumn } from "@/types/domain";
 
@@ -31,29 +33,32 @@ function toDomainColumn(record: BoardColumnRecord): BoardColumn {
     title: record.title,
     position: record.position,
     color: record.color,
-    cards: record.cards?.map((c) => ({
-      id: c.id,
-      columnId: c.columnId,
-      boardId: c.boardId,
-      title: c.title,
-      description: c.description,
-      position: c.position,
-      dueDate: c.dueDate ? c.dueDate.toISOString() : null,
-      labels: c.labels,
-      assigneeIds: c.assigneeIds,
-      assignees: c.assignees,
-      createdAt: c.createdAt.toISOString(),
-      updatedAt: c.updatedAt.toISOString(),
-    })),
     createdAt: record.createdAt.toISOString(),
     updatedAt: record.updatedAt.toISOString(),
+    cards: record.cards
+      ? record.cards.map((card) => ({
+          id: card.id,
+          columnId: card.columnId,
+          boardId: card.boardId,
+          title: card.title,
+          description: card.description,
+          position: card.position,
+          dueDate: card.dueDate ? card.dueDate.toISOString() : null,
+          labels: card.labels,
+          assigneeIds: card.assigneeIds,
+          assignees: card.assignees,
+          createdAt: card.createdAt.toISOString(),
+          updatedAt: card.updatedAt.toISOString(),
+        }))
+      : [],
   };
 }
 
 export class BoardColumnService {
   constructor(
     private readonly columnRepo: IBoardColumnRepository = boardColumnRepository,
-    private readonly authService: BoardAuthorizationService = boardAuth
+    private readonly authService: BoardAuthorizationService = boardAuth,
+    private readonly publisher: IEventPublisher = eventPublisher
   ) {}
 
   /**
@@ -65,7 +70,8 @@ export class BoardColumnService {
     userId: string,
     dto: CreateColumnDTO
   ): Promise<BoardColumn> {
-    await this.authService.requireBoardInWorkspace(boardId, workspaceId, userId);
+    const authResult = await this.authService.requireBoardInWorkspace(boardId, workspaceId, userId);
+    const canonicalWorkspaceId = authResult?.workspace?.id ?? workspaceId;
 
     const created = await this.columnRepo.create({
       boardId,
@@ -74,7 +80,28 @@ export class BoardColumnService {
       position: dto.position,
     });
 
-    return toDomainColumn(created);
+    const domainColumn = toDomainColumn(created);
+
+    await this.publisher.publish({
+      eventId: createEventId(),
+      type: "column.created",
+      workspaceId: canonicalWorkspaceId,
+      boardId,
+      columnId: domainColumn.id,
+      column: {
+        id: domainColumn.id,
+        boardId: domainColumn.boardId,
+        title: domainColumn.title,
+        position: domainColumn.position,
+        color: domainColumn.color,
+        createdAt: domainColumn.createdAt,
+        updatedAt: domainColumn.updatedAt,
+      },
+      version: createVersion(),
+      timestamp: new Date().toISOString(),
+    });
+
+    return domainColumn;
   }
 
   /**
@@ -87,7 +114,8 @@ export class BoardColumnService {
     userId: string,
     dto: UpdateColumnDTO
   ): Promise<BoardColumn> {
-    await this.authService.requireColumnInBoard(columnId, boardId, workspaceId, userId);
+    const authResult = await this.authService.requireColumnInBoard(columnId, boardId, workspaceId, userId);
+    const canonicalWorkspaceId = authResult?.workspace?.id ?? workspaceId;
 
     const updated = await this.columnRepo.update(columnId, {
       title: dto.title?.trim(),
@@ -95,7 +123,24 @@ export class BoardColumnService {
       position: dto.position,
     });
 
-    return toDomainColumn(updated);
+    const domainColumn = toDomainColumn(updated);
+
+    await this.publisher.publish({
+      eventId: createEventId(),
+      type: "column.updated",
+      workspaceId: canonicalWorkspaceId,
+      boardId,
+      columnId: domainColumn.id,
+      changes: {
+        title: dto.title?.trim(),
+        color: dto.color !== undefined ? dto.color?.trim() ?? null : undefined,
+        position: dto.position,
+      },
+      version: createVersion(),
+      timestamp: new Date().toISOString(),
+    });
+
+    return domainColumn;
   }
 
   /**
@@ -107,8 +152,23 @@ export class BoardColumnService {
     columnId: string,
     userId: string
   ): Promise<boolean> {
-    await this.authService.requireColumnInBoard(columnId, boardId, workspaceId, userId);
-    return this.columnRepo.delete(columnId);
+    const authResult = await this.authService.requireColumnInBoard(columnId, boardId, workspaceId, userId);
+    const canonicalWorkspaceId = authResult?.workspace?.id ?? workspaceId;
+    const deleted = await this.columnRepo.delete(columnId);
+
+    if (deleted) {
+      await this.publisher.publish({
+        eventId: createEventId(),
+        type: "column.deleted",
+        workspaceId: canonicalWorkspaceId,
+        boardId,
+        columnId,
+        version: createVersion(),
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    return deleted;
   }
 
   /**
@@ -120,7 +180,8 @@ export class BoardColumnService {
     userId: string,
     dto: MoveColumnDTO
   ): Promise<BoardColumn> {
-    await this.authService.requireColumnInBoard(dto.columnId, boardId, workspaceId, userId);
+    const authResult = await this.authService.requireColumnInBoard(dto.columnId, boardId, workspaceId, userId);
+    const canonicalWorkspaceId = authResult?.workspace?.id ?? workspaceId;
 
     if (dto.targetPosition < 0) {
       throw new ValidationError("Target position must be non-negative.");
@@ -132,7 +193,22 @@ export class BoardColumnService {
       targetPosition: dto.targetPosition,
     });
 
-    return toDomainColumn(moved);
+    const domainColumn = toDomainColumn(moved);
+
+    await this.publisher.publish({
+      eventId: createEventId(),
+      type: "column.updated",
+      workspaceId: canonicalWorkspaceId,
+      boardId,
+      columnId: domainColumn.id,
+      changes: {
+        position: domainColumn.position,
+      },
+      version: createVersion(),
+      timestamp: new Date().toISOString(),
+    });
+
+    return domainColumn;
   }
 
   /**
@@ -144,7 +220,8 @@ export class BoardColumnService {
     userId: string,
     columnIds: string[]
   ): Promise<BoardColumn[]> {
-    await this.authService.requireBoardInWorkspace(boardId, workspaceId, userId);
+    const authResult = await this.authService.requireBoardInWorkspace(boardId, workspaceId, userId);
+    const canonicalWorkspaceId = authResult?.workspace?.id ?? workspaceId;
 
     if (!columnIds || columnIds.length === 0) {
       throw new ValidationError("At least one column ID is required.");
@@ -161,7 +238,24 @@ export class BoardColumnService {
     }
 
     const reordered = await this.columnRepo.reorderColumns(boardId, columnIds);
-    return reordered.map(toDomainColumn);
+    const domainColumns = reordered.map(toDomainColumn);
+
+    for (const col of domainColumns) {
+      await this.publisher.publish({
+        eventId: createEventId(),
+        type: "column.updated",
+        workspaceId: canonicalWorkspaceId,
+        boardId,
+        columnId: col.id,
+        changes: {
+          position: col.position,
+        },
+        version: createVersion(),
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    return domainColumns;
   }
 }
 

@@ -1,9 +1,11 @@
 import { ValidationError } from "@/lib/api/errors";
+import { createEventId, createVersion } from "@/lib/realtime/events";
 import { cardRepository } from "@/server/db/repositories/card.repository";
 import type {
   CardRecord,
   ICardRepository,
 } from "@/server/db/repository";
+import { eventPublisher, IEventPublisher } from "@/server/websocket/event-publisher";
 import { boardAuth, BoardAuthorizationService } from "./board-authorization";
 import type { Card } from "@/types/domain";
 
@@ -54,7 +56,8 @@ function toDomainCard(record: CardRecord): Card {
 export class CardService {
   constructor(
     private readonly cardRepo: ICardRepository = cardRepository,
-    private readonly authService: BoardAuthorizationService = boardAuth
+    private readonly authService: BoardAuthorizationService = boardAuth,
+    private readonly publisher: IEventPublisher = eventPublisher
   ) {}
 
   /**
@@ -84,15 +87,16 @@ export class CardService {
     userId: string,
     dto: CreateCardDTO
   ): Promise<Card> {
-    await this.authService.requireColumnInBoard(
+    const authResult = await this.authService.requireColumnInBoard(
       dto.columnId,
       boardId,
       workspaceId,
       userId
     );
+    const canonicalWorkspaceId = authResult?.workspace?.id ?? workspaceId;
 
     if (dto.assigneeIds && dto.assigneeIds.length > 0) {
-      await this.authService.validateAssigneesInWorkspace(dto.assigneeIds, workspaceId);
+      await this.authService.validateAssigneesInWorkspace(dto.assigneeIds, canonicalWorkspaceId);
     }
 
     let parsedDueDate: Date | null | undefined = undefined;
@@ -119,7 +123,21 @@ export class CardService {
       labels: dto.labels,
     });
 
-    return toDomainCard(created);
+    const domainCard = toDomainCard(created);
+
+    await this.publisher.publish({
+      eventId: createEventId(),
+      type: "card.created",
+      workspaceId: canonicalWorkspaceId,
+      boardId,
+      columnId: domainCard.columnId,
+      cardId: domainCard.id,
+      card: domainCard,
+      version: createVersion(),
+      timestamp: new Date().toISOString(),
+    });
+
+    return domainCard;
   }
 
   /**
@@ -132,19 +150,20 @@ export class CardService {
     userId: string,
     dto: UpdateCardDTO
   ): Promise<Card> {
-    await this.authService.requireCardInBoard(cardId, boardId, workspaceId, userId);
+    const authResult = await this.authService.requireCardInBoard(cardId, boardId, workspaceId, userId);
+    const canonicalWorkspaceId = authResult?.workspace?.id ?? workspaceId;
 
     if (dto.columnId) {
       await this.authService.requireColumnInBoard(
         dto.columnId,
         boardId,
-        workspaceId,
+        canonicalWorkspaceId,
         userId
       );
     }
 
     if (dto.assigneeIds !== undefined) {
-      await this.authService.validateAssigneesInWorkspace(dto.assigneeIds, workspaceId);
+      await this.authService.validateAssigneesInWorkspace(dto.assigneeIds, canonicalWorkspaceId);
     }
 
     let parsedDueDate: Date | null | undefined = undefined;
@@ -170,7 +189,29 @@ export class CardService {
       labels: dto.labels,
     });
 
-    return toDomainCard(updated);
+    const domainCard = toDomainCard(updated);
+
+    await this.publisher.publish({
+      eventId: createEventId(),
+      type: "card.updated",
+      workspaceId: canonicalWorkspaceId,
+      boardId,
+      columnId: domainCard.columnId,
+      cardId: domainCard.id,
+      changes: {
+        title: dto.title?.trim(),
+        description: dto.description !== undefined ? dto.description?.trim() ?? null : undefined,
+        columnId: dto.columnId,
+        position: dto.position,
+        dueDate: domainCard.dueDate,
+        assigneeIds: dto.assigneeIds,
+        labels: dto.labels,
+      },
+      version: createVersion(),
+      timestamp: new Date().toISOString(),
+    });
+
+    return domainCard;
   }
 
   /**
@@ -182,8 +223,25 @@ export class CardService {
     cardId: string,
     userId: string
   ): Promise<boolean> {
-    await this.authService.requireCardInBoard(cardId, boardId, workspaceId, userId);
-    return this.cardRepo.delete(cardId);
+    const authResult = await this.authService.requireCardInBoard(cardId, boardId, workspaceId, userId);
+    const canonicalWorkspaceId = authResult?.workspace?.id ?? workspaceId;
+    const card = authResult.card;
+    const deleted = await this.cardRepo.delete(cardId);
+
+    if (deleted) {
+      await this.publisher.publish({
+        eventId: createEventId(),
+        type: "card.deleted",
+        workspaceId: canonicalWorkspaceId,
+        boardId,
+        columnId: card?.columnId ?? "",
+        cardId,
+        version: createVersion(),
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    return deleted;
   }
 
   /**
@@ -195,26 +253,29 @@ export class CardService {
     userId: string,
     dto: MoveCardDTO
   ): Promise<Card> {
-    const { card } = await this.authService.requireCardInBoard(
+    const authResult = await this.authService.requireCardInBoard(
       dto.cardId,
       boardId,
       workspaceId,
       userId
     );
+    const canonicalWorkspaceId = authResult?.workspace?.id ?? workspaceId;
+    const card = authResult.card;
+
     await this.authService.requireColumnInBoard(
       dto.sourceColumnId,
       boardId,
-      workspaceId,
+      canonicalWorkspaceId,
       userId
     );
     await this.authService.requireColumnInBoard(
       dto.targetColumnId,
       boardId,
-      workspaceId,
+      canonicalWorkspaceId,
       userId
     );
 
-    if (card.columnId !== dto.sourceColumnId) {
+    if (card && card.columnId !== dto.sourceColumnId) {
       throw new ValidationError("Card does not belong to the specified source column.");
     }
 
@@ -229,7 +290,22 @@ export class CardService {
       targetPosition: dto.targetPosition,
     });
 
-    return toDomainCard(moved);
+    const domainCard = toDomainCard(moved);
+
+    await this.publisher.publish({
+      eventId: createEventId(),
+      type: "card.moved",
+      workspaceId: canonicalWorkspaceId,
+      boardId,
+      cardId: domainCard.id,
+      fromColumnId: dto.sourceColumnId,
+      toColumnId: dto.targetColumnId,
+      position: domainCard.position,
+      version: createVersion(),
+      timestamp: new Date().toISOString(),
+    });
+
+    return domainCard;
   }
 }
 

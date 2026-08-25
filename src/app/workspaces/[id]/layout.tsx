@@ -3,6 +3,7 @@ import { Badge } from "@/components/ui/badge";
 import { siteConfig } from "@/config/site";
 import { UserMenu } from "@/features/auth/components/UserMenu";
 import { WorkspaceHeader } from "@/features/workspace/components/WorkspaceHeader";
+import { WorkspaceRealtimeProvider } from "@/providers/realtime-provider";
 
 interface WorkspaceLayoutProps {
   children: React.ReactNode;
@@ -28,7 +29,7 @@ export default async function WorkspaceLayout({
               <span className="text-lg font-semibold tracking-tight">{siteConfig.name}</span>
             </Link>
             <Badge variant="outline" className="ml-2 font-mono text-xs">
-              Phase 3: Workspaces & RBAC
+              Phase 6: Real-Time Active
             </Badge>
           </div>
           <div className="flex items-center space-x-4">
@@ -39,8 +40,10 @@ export default async function WorkspaceLayout({
 
       {/* Main Workspace Wrapper */}
       <main className="container mx-auto max-w-6xl px-6 pb-12">
-        <WorkspaceHeader workspaceId={id} />
-        <div className="mt-8">{children}</div>
+        <WorkspaceRealtimeProvider workspaceId={id}>
+          <WorkspaceHeader workspaceId={id} />
+          <div className="mt-8">{children}</div>
+        </WorkspaceRealtimeProvider>
       </main>
     </div>
   );

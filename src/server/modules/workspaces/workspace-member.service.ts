@@ -5,6 +5,7 @@ import {
   NotFoundError,
   ValidationError,
 } from "@/lib/api/errors";
+import { createEventId, createVersion } from "@/lib/realtime/events";
 import { emailService, EmailService } from "@/server/email/email.service";
 import { userRepository } from "@/server/db/repositories/user.repository";
 import { workspaceInvitationRepository } from "@/server/db/repositories/workspace-invitation.repository";
@@ -17,6 +18,7 @@ import type {
   IWorkspaceRepository,
   WorkspaceMemberWithUserRecord,
 } from "@/server/db/repository";
+import { eventPublisher, IEventPublisher } from "@/server/websocket/event-publisher";
 import {
   evaluateMemberRemoval,
   normalizeRole,
@@ -80,7 +82,8 @@ export class WorkspaceMemberService {
     private readonly userRepo: IUserRepository = userRepository,
     private readonly invitationRepo: IWorkspaceInvitationRepository = workspaceInvitationRepository,
     private readonly authService: WorkspaceAuthorizationService = workspaceAuth,
-    private readonly mailer: EmailService = emailService
+    private readonly mailer: EmailService = emailService,
+    private readonly publisher: IEventPublisher = eventPublisher
   ) {}
 
   /**
@@ -284,6 +287,21 @@ export class WorkspaceMemberService {
       invitation.role
     );
 
+    // Broadcast member.added event to workspace room
+    const members = await this.memberRepo.findMembersByWorkspaceId(invitation.workspaceId);
+    const addedMember = members.find((m) => m.userId === userId);
+    if (addedMember) {
+      await this.publisher.publish({
+        eventId: createEventId(),
+        type: "member.added",
+        workspaceId: invitation.workspaceId,
+        memberId: addedMember.id,
+        member: toDomainWorkspaceMember(addedMember),
+        version: createVersion(),
+        timestamp: new Date().toISOString(),
+      });
+    }
+
     return {
       workspaceId: invitation.workspaceId,
     };
@@ -331,7 +349,20 @@ export class WorkspaceMemberService {
       );
     }
 
-    return this.memberRepo.delete(workspace.id, targetUserId);
+    const deleted = await this.memberRepo.delete(workspace.id, targetUserId);
+
+    if (deleted) {
+      await this.publisher.publish({
+        eventId: createEventId(),
+        type: "member.removed",
+        workspaceId: workspace.id,
+        memberId: targetMember.id,
+        version: createVersion(),
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    return deleted;
   }
 }
 

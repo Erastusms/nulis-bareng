@@ -19,6 +19,7 @@ export const serverEnvSchema = z.object({
     .string()
     .transform((val) => val === "true")
     .default("false"),
+  WS_PORT: z.coerce.number().default(3001),
 });
 
 /**
@@ -29,6 +30,7 @@ export const clientEnvSchema = z.object({
   NEXT_PUBLIC_APP_NAME: z.string().min(1).default("NulisBareng"),
   NEXT_PUBLIC_APP_URL: z.string().url().default("http://localhost:3000"),
   NEXT_PUBLIC_API_URL: z.string().url().default("http://localhost:3000/api"),
+  NEXT_PUBLIC_WS_URL: z.string().default("ws://localhost:3001"),
   NEXT_PUBLIC_ENABLE_REALTIME: z
     .string()
     .transform((val) => val === "true")
@@ -47,6 +49,11 @@ export function validateEnv(isServerOverride?: boolean): ClientEnv & ServerEnv {
     NEXT_PUBLIC_APP_URL:
       process.env.NEXT_PUBLIC_APP_URL || process.env.APP_URL || "http://localhost:3000",
     NEXT_PUBLIC_API_URL: process.env.NEXT_PUBLIC_API_URL,
+    NEXT_PUBLIC_WS_URL:
+      process.env.NEXT_PUBLIC_WS_URL ||
+      (process.env.NEXT_PUBLIC_APP_URL
+        ? process.env.NEXT_PUBLIC_APP_URL.replace(/^http/, "ws")
+        : "ws://localhost:3001"),
     NEXT_PUBLIC_ENABLE_REALTIME: process.env.NEXT_PUBLIC_ENABLE_REALTIME,
   });
 
@@ -72,6 +79,7 @@ export function validateEnv(isServerOverride?: boolean): ClientEnv & ServerEnv {
       SMTP_USER: process.env.SMTP_USER,
       SMTP_PASSWORD: process.env.SMTP_PASSWORD,
       SMTP_SECURE: process.env.SMTP_SECURE,
+      WS_PORT: process.env.WS_PORT,
     });
 
     if (!serverParsed.success) {
@@ -101,6 +109,7 @@ export function validateEnv(isServerOverride?: boolean): ClientEnv & ServerEnv {
     SMTP_USER: undefined,
     SMTP_PASSWORD: undefined,
     SMTP_SECURE: false,
+    WS_PORT: 3001,
   };
 }
 
