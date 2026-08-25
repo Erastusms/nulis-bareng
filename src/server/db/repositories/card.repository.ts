@@ -6,6 +6,12 @@ import type {
   MoveCardData,
   UpdateCardData,
 } from "../repository";
+import {
+  calculatePosition,
+  generateRebalancedPositions,
+  isGapExhausted,
+  ORDERING_CONSTANTS,
+} from "../../modules/boards/ordering.utils";
 
 export class PrismaCardRepository implements ICardRepository {
   constructor(private readonly prisma: DatabaseClient = db) {}
@@ -59,7 +65,7 @@ export class PrismaCardRepository implements ICardRepository {
   async findByColumnId(columnId: string): Promise<CardRecord[]> {
     const records = await this.prisma.card.findMany({
       where: { columnId },
-      orderBy: { position: "asc" },
+      orderBy: [{ position: "asc" }, { id: "asc" }],
       include: {
         assignees: {
           include: {
@@ -104,7 +110,7 @@ export class PrismaCardRepository implements ICardRepository {
   async findByBoardId(boardId: string): Promise<CardRecord[]> {
     const records = await this.prisma.card.findMany({
       where: { boardId },
-      orderBy: { position: "asc" },
+      orderBy: [{ position: "asc" }, { id: "asc" }],
       include: {
         assignees: {
           include: {
@@ -150,10 +156,13 @@ export class PrismaCardRepository implements ICardRepository {
     return await this.prisma.$transaction(async (tx) => {
       let position = data.position;
       if (position === undefined) {
-        const count = await tx.card.count({
+        const lastCard = await tx.card.findFirst({
           where: { columnId: data.columnId },
+          orderBy: [{ position: "desc" }, { id: "desc" }],
         });
-        position = count;
+        position = lastCard
+          ? lastCard.position + ORDERING_CONSTANTS.POSITION_GAP
+          : ORDERING_CONSTANTS.INITIAL_POSITION;
       }
 
       const card = await tx.card.create({
@@ -312,78 +321,44 @@ export class PrismaCardRepository implements ICardRepository {
 
   async moveCard(data: MoveCardData): Promise<CardRecord> {
     return await this.prisma.$transaction(async (tx) => {
-      const targetCard = await tx.card.findUniqueOrThrow({
-        where: { id: data.cardId },
+      // 1. Fetch other cards in target column ordered deterministically
+      const targetCards = await tx.card.findMany({
+        where: {
+          columnId: data.targetColumnId,
+          id: { not: data.cardId },
+        },
+        orderBy: [{ position: "asc" }, { id: "asc" }],
       });
 
-      const isSameColumn = data.sourceColumnId === data.targetColumnId;
+      const clampedIndex = Math.max(0, Math.min(data.targetPosition, targetCards.length));
+      let prevPos = clampedIndex > 0 ? targetCards[clampedIndex - 1].position : null;
+      let nextPos = clampedIndex < targetCards.length ? targetCards[clampedIndex].position : null;
 
-      if (isSameColumn) {
-        // Fetch all cards in the column ordered by position
-        const columnCards = await tx.card.findMany({
-          where: { columnId: data.sourceColumnId },
-          orderBy: { position: "asc" },
-        });
-
-        // Filter out target card
-        const otherCards = columnCards.filter((c) => c.id !== data.cardId);
-
-        // Clamp target position
-        const clampedPos = Math.max(0, Math.min(data.targetPosition, otherCards.length));
-
-        // Insert at target position
-        otherCards.splice(clampedPos, 0, targetCard);
-
-        // Re-index all cards in the column
-        for (let i = 0; i < otherCards.length; i++) {
-          await tx.card.update({
-            where: { id: otherCards[i].id },
-            data: { position: i },
-          });
-        }
-      } else {
-        // 1. Re-index source column (excluding target card)
-        const sourceCards = await tx.card.findMany({
-          where: {
-            columnId: data.sourceColumnId,
-            id: { not: data.cardId },
-          },
-          orderBy: { position: "asc" },
-        });
-
-        for (let i = 0; i < sourceCards.length; i++) {
-          await tx.card.update({
-            where: { id: sourceCards[i].id },
-            data: { position: i },
-          });
-        }
-
-        // 2. Fetch destination column cards
-        const targetCards = await tx.card.findMany({
-          where: { columnId: data.targetColumnId },
-          orderBy: { position: "asc" },
-        });
-
-        // Clamp target position
-        const clampedPos = Math.max(0, Math.min(data.targetPosition, targetCards.length));
-
-        // Insert target card
-        targetCards.splice(clampedPos, 0, {
-          ...targetCard,
-          columnId: data.targetColumnId,
-        });
-
-        // 3. Update all target column cards
+      // 2. Check for gap exhaustion and rebalance column if needed
+      if (isGapExhausted(prevPos, nextPos)) {
+        const rebalancedPositions = generateRebalancedPositions(targetCards.length);
         for (let i = 0; i < targetCards.length; i++) {
+          targetCards[i].position = rebalancedPositions[i];
           await tx.card.update({
             where: { id: targetCards[i].id },
-            data: {
-              columnId: data.targetColumnId,
-              position: i,
-            },
+            data: { position: rebalancedPositions[i] },
           });
         }
+        prevPos = clampedIndex > 0 ? targetCards[clampedIndex - 1].position : null;
+        nextPos = clampedIndex < targetCards.length ? targetCards[clampedIndex].position : null;
       }
+
+      // 3. Calculate new position
+      const newPosition = calculatePosition(prevPos, nextPos);
+
+      // 4. Update the moved card (single update in common case)
+      await tx.card.update({
+        where: { id: data.cardId },
+        data: {
+          columnId: data.targetColumnId,
+          position: newPosition,
+        },
+      });
 
       const finalCard = await tx.card.findUniqueOrThrow({
         where: { id: data.cardId },

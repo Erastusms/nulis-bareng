@@ -127,6 +127,7 @@ model Board {
   cards       Card[]
 
   @@index([workspaceId])
+  @@index([workspaceId, position])
   @@map("boards")
 }
 
@@ -143,6 +144,7 @@ model BoardColumn {
   cards     Card[]
 
   @@index([boardId])
+  @@index([boardId, position])
   @@map("board_columns")
 }
 
@@ -164,6 +166,8 @@ model Card {
 
   @@index([columnId])
   @@index([boardId])
+  @@index([columnId, position])
+  @@index([boardId, position])
   @@map("cards")
 }
 

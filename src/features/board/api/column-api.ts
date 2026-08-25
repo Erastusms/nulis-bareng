@@ -2,6 +2,7 @@ import { apiClient } from "@/lib/api/client";
 import type { BoardColumn } from "@/types/domain";
 import type {
   CreateColumnInput,
+  MoveColumnInput,
   ReorderColumnsInput,
   UpdateColumnInput,
 } from "../schemas/board.schema";
@@ -36,6 +37,17 @@ export async function deleteColumn(
 ): Promise<{ message: string }> {
   return apiClient.delete<{ message: string }>(
     `/workspaces/${workspaceId}/boards/${boardId}/columns/${columnId}`
+  );
+}
+
+export async function moveColumn(
+  workspaceId: string,
+  boardId: string,
+  input: MoveColumnInput
+): Promise<BoardColumn> {
+  return apiClient.post<BoardColumn>(
+    `/workspaces/${workspaceId}/boards/${boardId}/columns/move`,
+    input
   );
 }
 

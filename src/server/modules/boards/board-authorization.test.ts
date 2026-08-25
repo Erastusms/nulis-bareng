@@ -85,6 +85,7 @@ describe("BoardAuthorizationService (Cross-Workspace Isolation & RBAC)", () => {
       create: vi.fn(),
       update: vi.fn(),
       delete: vi.fn(),
+      moveColumn: vi.fn(),
       reorderColumns: vi.fn(),
     };
 

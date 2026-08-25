@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { ValidationError } from "@/lib/api/errors";
+import { ForbiddenError, ValidationError } from "@/lib/api/errors";
 import { BoardColumnService } from "./board-column.service";
 import { BoardAuthorizationService } from "./board-authorization";
 import type { IBoardColumnRepository } from "@/server/db/repository";
@@ -13,7 +13,7 @@ describe("BoardColumnService", () => {
     id: "col_1",
     boardId: "board_1",
     title: "To Do",
-    position: 0,
+    position: 65536,
     color: "#3b82f6",
     createdAt: new Date("2026-08-23T00:00:00.000Z"),
     updatedAt: new Date("2026-08-23T00:00:00.000Z"),
@@ -28,6 +28,7 @@ describe("BoardColumnService", () => {
       create: vi.fn(),
       update: vi.fn(),
       delete: vi.fn(),
+      moveColumn: vi.fn(),
       reorderColumns: vi.fn(),
     };
 
@@ -97,15 +98,64 @@ describe("BoardColumnService", () => {
     });
   });
 
+  describe("moveColumn", () => {
+    it("should move column successfully to target index", async () => {
+      vi.spyOn(columnRepoMock, "moveColumn").mockResolvedValue({
+        ...mockColumnRecord,
+        position: 131072,
+      });
+
+      const result = await service.moveColumn("ws_1", "board_1", "user_1", {
+        columnId: "col_1",
+        targetPosition: 1,
+      });
+
+      expect(authServiceMock.requireColumnInBoard).toHaveBeenCalledWith(
+        "col_1",
+        "board_1",
+        "ws_1",
+        "user_1"
+      );
+      expect(columnRepoMock.moveColumn).toHaveBeenCalledWith({
+        columnId: "col_1",
+        boardId: "board_1",
+        targetPosition: 1,
+      });
+      expect(result.position).toBe(131072);
+    });
+
+    it("should reject move if target position is negative", async () => {
+      await expect(
+        service.moveColumn("ws_1", "board_1", "user_1", {
+          columnId: "col_1",
+          targetPosition: -1,
+        })
+      ).rejects.toThrow(ValidationError);
+    });
+
+    it("should reject move if user is unauthorized", async () => {
+      vi.spyOn(authServiceMock, "requireColumnInBoard").mockRejectedValue(
+        new ForbiddenError("Unauthorized access")
+      );
+
+      await expect(
+        service.moveColumn("ws_1", "board_1", "user_intruder", {
+          columnId: "col_1",
+          targetPosition: 0,
+        })
+      ).rejects.toThrow(ForbiddenError);
+    });
+  });
+
   describe("reorderColumns", () => {
     it("should reorder columns when all column IDs are valid", async () => {
       vi.spyOn(columnRepoMock, "findByBoardId").mockResolvedValue([
         mockColumnRecord,
-        { ...mockColumnRecord, id: "col_2", position: 1 },
+        { ...mockColumnRecord, id: "col_2", position: 131072 },
       ]);
       vi.spyOn(columnRepoMock, "reorderColumns").mockResolvedValue([
-        { ...mockColumnRecord, id: "col_2", position: 0 },
-        { ...mockColumnRecord, id: "col_1", position: 1 },
+        { ...mockColumnRecord, id: "col_2", position: 65536 },
+        { ...mockColumnRecord, id: "col_1", position: 131072 },
       ]);
 
       const result = await service.reorderColumns("ws_1", "board_1", "user_1", [
@@ -123,6 +173,12 @@ describe("BoardColumnService", () => {
 
       await expect(
         service.reorderColumns("ws_1", "board_1", "user_1", ["col_invalid"])
+      ).rejects.toThrow(ValidationError);
+    });
+
+    it("should reject reordering if columnIds is empty", async () => {
+      await expect(
+        service.reorderColumns("ws_1", "board_1", "user_1", [])
       ).rejects.toThrow(ValidationError);
     });
   });

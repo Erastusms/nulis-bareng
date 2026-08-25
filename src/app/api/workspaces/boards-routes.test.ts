@@ -11,6 +11,7 @@ import {
   PATCH as updateColumnHandler,
   DELETE as deleteColumnHandler,
 } from "./[id]/boards/[boardId]/columns/[columnId]/route";
+import { POST as moveColumnHandler } from "./[id]/boards/[boardId]/columns/move/route";
 import { PATCH as reorderColumnsHandler } from "./[id]/boards/[boardId]/columns/reorder/route";
 import { POST as createCardHandler } from "./[id]/boards/[boardId]/cards/route";
 import {
@@ -49,7 +50,7 @@ describe("Kanban API Route Handlers", () => {
     id: "col_1",
     boardId: "board_1",
     title: "To Do",
-    position: 0,
+    position: 65536,
     color: "#3b82f6",
     createdAt: "2026-08-23T00:00:00.000Z",
     updatedAt: "2026-08-23T00:00:00.000Z",
@@ -61,7 +62,7 @@ describe("Kanban API Route Handlers", () => {
     boardId: "board_1",
     title: "Write documentation",
     description: "API docs",
-    position: 0,
+    position: 65536,
     dueDate: null,
     labels: ["Docs"],
     assigneeIds: [],
@@ -219,6 +220,30 @@ describe("Kanban API Route Handlers", () => {
       expect(data.success).toBe(true);
     });
 
+    it("POST /api/workspaces/[id]/boards/[boardId]/columns/move returns 200 on move column", async () => {
+      vi.spyOn(boardColumnService, "moveColumn").mockResolvedValue({
+        ...mockColumn,
+        position: 131072,
+      });
+
+      const req = new NextRequest(
+        "http://localhost:3000/api/workspaces/ws_1/boards/board_1/columns/move",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ columnId: "col_1", targetPosition: 1 }),
+        }
+      );
+      const res = await moveColumnHandler(req, {
+        params: Promise.resolve({ id: "ws_1", boardId: "board_1" }),
+      });
+      const data = await res.json();
+
+      expect(res.status).toBe(200);
+      expect(data.success).toBe(true);
+      expect(data.data.position).toBe(131072);
+    });
+
     it("PATCH /api/workspaces/[id]/boards/[boardId]/columns/reorder returns 200 on reorder", async () => {
       vi.spyOn(boardColumnService, "reorderColumns").mockResolvedValue([mockColumn]);
 
@@ -326,7 +351,7 @@ describe("Kanban API Route Handlers", () => {
       vi.spyOn(cardService, "moveCard").mockResolvedValue({
         ...mockCard,
         columnId: "col_2",
-        position: 1,
+        position: 131072,
       });
 
       const req = new NextRequest(

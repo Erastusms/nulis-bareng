@@ -5,6 +5,7 @@ import type {
   IBoardRepository,
   UpdateBoardData,
 } from "../repository";
+import { ORDERING_CONSTANTS } from "../../modules/boards/ordering.utils";
 
 export class PrismaBoardRepository implements IBoardRepository {
   constructor(private readonly prisma: DatabaseClient = db) {}
@@ -32,10 +33,10 @@ export class PrismaBoardRepository implements IBoardRepository {
       where: { id },
       include: {
         columns: {
-          orderBy: { position: "asc" },
+          orderBy: [{ position: "asc" }, { id: "asc" }],
           include: {
             cards: {
-              orderBy: { position: "asc" },
+              orderBy: [{ position: "asc" }, { id: "asc" }],
               include: {
                 assignees: {
                   include: {
@@ -104,7 +105,7 @@ export class PrismaBoardRepository implements IBoardRepository {
   async findByWorkspaceId(workspaceId: string): Promise<BoardRecord[]> {
     const records = await this.prisma.board.findMany({
       where: { workspaceId },
-      orderBy: { position: "asc" },
+      orderBy: [{ position: "asc" }, { id: "asc" }],
     });
 
     return records.map((record) => ({
@@ -121,10 +122,13 @@ export class PrismaBoardRepository implements IBoardRepository {
   async create(data: CreateBoardData): Promise<BoardRecord> {
     let position = data.position;
     if (position === undefined) {
-      const count = await this.prisma.board.count({
+      const lastBoard = await this.prisma.board.findFirst({
         where: { workspaceId: data.workspaceId },
+        orderBy: [{ position: "desc" }, { id: "desc" }],
       });
-      position = count;
+      position = lastBoard
+        ? lastBoard.position + ORDERING_CONSTANTS.POSITION_GAP
+        : ORDERING_CONSTANTS.INITIAL_POSITION;
     }
 
     const record = await this.prisma.board.create({

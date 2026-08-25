@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import {
   useCreateColumn,
   useDeleteColumn,
+  useMoveColumn,
   useReorderColumns,
   useUpdateColumn,
 } from "./use-columns";
@@ -32,7 +33,7 @@ describe("Column Hooks (use-columns.ts)", () => {
     id: "col_1",
     boardId: "board_1",
     title: "To Do",
-    position: 0,
+    position: 65536,
     color: "#3b82f6",
     createdAt: "2026-08-23T00:00:00.000Z",
     updatedAt: "2026-08-23T00:00:00.000Z",
@@ -89,6 +90,22 @@ describe("Column Hooks (use-columns.ts)", () => {
       result.current.mutate("col_1");
 
       await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    });
+  });
+
+  describe("useMoveColumn", () => {
+    it("should move single column", async () => {
+      const moved = { ...mockColumn, position: 131072 };
+      vi.spyOn(columnApiModule, "moveColumn").mockResolvedValue(moved);
+
+      const { result } = renderHook(() => useMoveColumn("ws_1", "board_1"), {
+        wrapper: createWrapper(),
+      });
+
+      result.current.mutate({ columnId: "col_1", targetPosition: 1 });
+
+      await waitFor(() => expect(result.current.isSuccess).toBe(true));
+      expect(result.current.data).toEqual(moved);
     });
   });
 

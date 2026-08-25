@@ -4,11 +4,13 @@ import type { Board } from "@/types/domain";
 import {
   createColumn,
   deleteColumn,
+  moveColumn,
   reorderColumns,
   updateColumn,
 } from "../api/column-api";
 import type {
   CreateColumnInput,
+  MoveColumnInput,
   ReorderColumnsInput,
   UpdateColumnInput,
 } from "../schemas/board.schema";
@@ -62,6 +64,48 @@ export function useDeleteColumn(workspaceId: string, boardId: string) {
 }
 
 /**
+ * Mutation hook to move a single column with optimistic UI updates.
+ */
+export function useMoveColumn(workspaceId: string, boardId: string) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (data: MoveColumnInput) => moveColumn(workspaceId, boardId, data),
+    onMutate: async (moveInput) => {
+      await queryClient.cancelQueries({ queryKey: boardKeys.detail(boardId) });
+
+      const previousBoard = queryClient.getQueryData<Board>(boardKeys.detail(boardId));
+
+      if (previousBoard && previousBoard.columns) {
+        const columns = [...previousBoard.columns];
+        const sourceIndex = columns.findIndex((c) => c.id === moveInput.columnId);
+
+        if (sourceIndex !== -1) {
+          const [movedColumn] = columns.splice(sourceIndex, 1);
+          const targetIndex = Math.max(0, Math.min(moveInput.targetPosition, columns.length));
+          columns.splice(targetIndex, 0, movedColumn);
+
+          queryClient.setQueryData<Board>(boardKeys.detail(boardId), {
+            ...previousBoard,
+            columns,
+          });
+        }
+      }
+
+      return { previousBoard };
+    },
+    onError: (_err, _moveInput, context) => {
+      if (context?.previousBoard) {
+        queryClient.setQueryData(boardKeys.detail(boardId), context.previousBoard);
+      }
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: boardKeys.detail(boardId) });
+    },
+  });
+}
+
+/**
  * Mutation hook to reorder columns with optimistic UI updates.
  */
 export function useReorderColumns(workspaceId: string, boardId: string) {
@@ -79,7 +123,7 @@ export function useReorderColumns(workspaceId: string, boardId: string) {
         const reordered = newOrder.columnIds
           .map((id, index) => {
             const col = columnMap.get(id);
-            return col ? { ...col, position: index } : null;
+            return col ? { ...col, position: (index + 1) * 65536 } : null;
           })
           .filter(Boolean) as typeof previousBoard.columns;
 

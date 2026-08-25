@@ -24,6 +24,11 @@ export const updateColumnSchema = z.object({
   position: z.number().int().nonnegative().optional(),
 });
 
+export const moveColumnSchema = z.object({
+  columnId: z.string().min(1, "Column ID is required"),
+  targetPosition: z.number().int().nonnegative("Target position must be non-negative"),
+});
+
 export const reorderColumnsSchema = z.object({
   columnIds: z.array(z.string().min(1)).min(1, "At least one column ID is required"),
 });
@@ -59,6 +64,7 @@ export type CreateBoardInput = z.infer<typeof createBoardSchema>;
 export type UpdateBoardInput = z.infer<typeof updateBoardSchema>;
 export type CreateColumnInput = z.infer<typeof createColumnSchema>;
 export type UpdateColumnInput = z.infer<typeof updateColumnSchema>;
+export type MoveColumnInput = z.infer<typeof moveColumnSchema>;
 export type ReorderColumnsInput = z.infer<typeof reorderColumnsSchema>;
 export type CreateCardInput = z.infer<typeof createCardSchema>;
 export type UpdateCardInput = z.infer<typeof updateCardSchema>;

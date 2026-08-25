@@ -195,7 +195,12 @@ export class CardService {
     userId: string,
     dto: MoveCardDTO
   ): Promise<Card> {
-    await this.authService.requireCardInBoard(dto.cardId, boardId, workspaceId, userId);
+    const { card } = await this.authService.requireCardInBoard(
+      dto.cardId,
+      boardId,
+      workspaceId,
+      userId
+    );
     await this.authService.requireColumnInBoard(
       dto.sourceColumnId,
       boardId,
@@ -208,6 +213,14 @@ export class CardService {
       workspaceId,
       userId
     );
+
+    if (card.columnId !== dto.sourceColumnId) {
+      throw new ValidationError("Card does not belong to the specified source column.");
+    }
+
+    if (dto.targetPosition < 0) {
+      throw new ValidationError("Target position must be non-negative.");
+    }
 
     const moved = await this.cardRepo.moveCard({
       cardId: dto.cardId,

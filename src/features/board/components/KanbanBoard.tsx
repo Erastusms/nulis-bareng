@@ -20,7 +20,7 @@ import { Dialog } from "@/components/ui/dialog";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useBoard, useDeleteBoard } from "../hooks/use-boards";
 import { useMoveCard } from "../hooks/use-cards";
-import { useReorderColumns } from "../hooks/use-columns";
+import { useMoveColumn } from "../hooks/use-columns";
 import { CreateColumnModal } from "./CreateColumnModal";
 import { EditBoardModal } from "./EditBoardModal";
 import { KanbanColumn } from "./KanbanColumn";
@@ -42,7 +42,7 @@ export function KanbanBoard({ workspaceId, boardId }: KanbanBoardProps) {
   }, []);
 
   const { data: board, isLoading, error } = useBoard(workspaceId, boardId);
-  const reorderColumnsMutation = useReorderColumns(workspaceId, boardId);
+  const moveColumnMutation = useMoveColumn(workspaceId, boardId);
   const moveCardMutation = useMoveCard(workspaceId, boardId);
   const deleteBoardMutation = useDeleteBoard(workspaceId);
 
@@ -59,12 +59,10 @@ export function KanbanBoard({ workspaceId, boardId }: KanbanBoardProps) {
     }
 
     if (type === "column") {
-      if (!board?.columns) return;
-      const columnIds = board.columns.map((c) => c.id);
-      const [removed] = columnIds.splice(source.index, 1);
-      columnIds.splice(destination.index, 0, removed);
-
-      reorderColumnsMutation.mutate({ columnIds });
+      moveColumnMutation.mutate({
+        columnId: draggableId,
+        targetPosition: destination.index,
+      });
       return;
     }
 

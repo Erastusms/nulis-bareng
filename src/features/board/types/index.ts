@@ -4,6 +4,7 @@ export type {
   UpdateBoardInput,
   CreateColumnInput,
   UpdateColumnInput,
+  MoveColumnInput,
   ReorderColumnsInput,
   CreateCardInput,
   UpdateCardInput,

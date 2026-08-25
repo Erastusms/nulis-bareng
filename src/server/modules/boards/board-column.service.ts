@@ -19,6 +19,11 @@ export interface UpdateColumnDTO {
   position?: number;
 }
 
+export interface MoveColumnDTO {
+  columnId: string;
+  targetPosition: number;
+}
+
 function toDomainColumn(record: BoardColumnRecord): BoardColumn {
   return {
     id: record.id,
@@ -107,6 +112,30 @@ export class BoardColumnService {
   }
 
   /**
+   * Moves a single column to a new target index within its board.
+   */
+  async moveColumn(
+    workspaceId: string,
+    boardId: string,
+    userId: string,
+    dto: MoveColumnDTO
+  ): Promise<BoardColumn> {
+    await this.authService.requireColumnInBoard(dto.columnId, boardId, workspaceId, userId);
+
+    if (dto.targetPosition < 0) {
+      throw new ValidationError("Target position must be non-negative.");
+    }
+
+    const moved = await this.columnRepo.moveColumn({
+      columnId: dto.columnId,
+      boardId,
+      targetPosition: dto.targetPosition,
+    });
+
+    return toDomainColumn(moved);
+  }
+
+  /**
    * Atomically reorders columns in a board.
    */
   async reorderColumns(
@@ -116,6 +145,10 @@ export class BoardColumnService {
     columnIds: string[]
   ): Promise<BoardColumn[]> {
     await this.authService.requireBoardInWorkspace(boardId, workspaceId, userId);
+
+    if (!columnIds || columnIds.length === 0) {
+      throw new ValidationError("At least one column ID is required.");
+    }
 
     const existingColumns = await this.columnRepo.findByBoardId(boardId);
     const existingIds = new Set(existingColumns.map((c) => c.id));

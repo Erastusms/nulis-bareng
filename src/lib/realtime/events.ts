@@ -9,6 +9,7 @@ export type RealtimeEventType =
   | "CARD_UPDATED"
   | "CARD_MOVED"
   | "CARD_DELETED"
+  | "COLUMN_MOVED"
   | "DOCUMENT_UPDATED"
   | "DOCUMENT_SAVED"
   | "MEMBER_JOINED"
@@ -23,6 +24,13 @@ export interface CardMovedPayload {
   targetColumnId: EntityId;
   sourcePosition: number;
   targetPosition: number;
+  userId: EntityId;
+}
+
+export interface ColumnMovedPayload {
+  columnId: EntityId;
+  boardId: EntityId;
+  position: number;
   userId: EntityId;
 }
 
@@ -42,6 +50,7 @@ export type RealtimeEvent =
   | { type: "CARD_UPDATED"; payload: Card; timestamp: string }
   | { type: "CARD_MOVED"; payload: CardMovedPayload; timestamp: string }
   | { type: "CARD_DELETED"; payload: { cardId: EntityId; boardId: EntityId }; timestamp: string }
+  | { type: "COLUMN_MOVED"; payload: ColumnMovedPayload; timestamp: string }
   | { type: "DOCUMENT_UPDATED"; payload: Partial<Document> & { id: EntityId }; timestamp: string }
   | { type: "DOCUMENT_SAVED"; payload: Document; timestamp: string }
   | { type: "MEMBER_JOINED"; payload: WorkspaceMember; timestamp: string }

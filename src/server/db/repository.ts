@@ -172,6 +172,12 @@ export interface UpdateBoardColumnData {
   color?: string | null;
 }
 
+export interface MoveColumnData {
+  columnId: string;
+  boardId: string;
+  targetPosition: number;
+}
+
 export interface CardRecord {
   id: string;
   columnId: string;
@@ -296,6 +302,7 @@ export interface IBoardColumnRepository {
   create(data: CreateBoardColumnData): Promise<BoardColumnRecord>;
   update(id: string, data: UpdateBoardColumnData): Promise<BoardColumnRecord>;
   delete(id: string): Promise<boolean>;
+  moveColumn(data: MoveColumnData): Promise<BoardColumnRecord>;
   reorderColumns(boardId: string, orderedColumnIds: string[]): Promise<BoardColumnRecord[]>;
 }
 

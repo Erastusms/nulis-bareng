@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { ValidationError } from "@/lib/api/errors";
+import { ForbiddenError, NotFoundError, ValidationError } from "@/lib/api/errors";
 import { CardService } from "./card.service";
 import { BoardAuthorizationService } from "./board-authorization";
 import type { ICardRepository } from "@/server/db/repository";
@@ -15,7 +15,7 @@ describe("CardService", () => {
     boardId: "board_1",
     title: "Implement drag and drop",
     description: "Use hello-pangea/dnd",
-    position: 0,
+    position: 65536,
     dueDate: new Date("2026-09-01T00:00:00.000Z"),
     labels: ["Feature", "Frontend"],
     assigneeIds: ["user_1"],
@@ -141,11 +141,11 @@ describe("CardService", () => {
   });
 
   describe("moveCard", () => {
-    it("should validate source and target columns and move card", async () => {
+    it("should validate source and target columns and move card successfully", async () => {
       vi.spyOn(cardRepoMock, "moveCard").mockResolvedValue({
         ...mockCardRecord,
         columnId: "col_2",
-        position: 1,
+        position: 131072,
       });
 
       const moved = await service.moveCard("ws_1", "board_1", "user_1", {
@@ -168,6 +168,102 @@ describe("CardService", () => {
         "user_1"
       );
       expect(moved.columnId).toBe("col_2");
+      expect(moved.position).toBe(131072);
+    });
+
+    it("should reject move if card does not belong to specified source column", async () => {
+      await expect(
+        service.moveCard("ws_1", "board_1", "user_1", {
+          cardId: "card_1",
+          sourceColumnId: "col_wrong",
+          targetColumnId: "col_2",
+          targetPosition: 0,
+        })
+      ).rejects.toThrow(ValidationError);
+    });
+
+    it("should reject move if target position is negative", async () => {
+      await expect(
+        service.moveCard("ws_1", "board_1", "user_1", {
+          cardId: "card_1",
+          sourceColumnId: "col_1",
+          targetColumnId: "col_2",
+          targetPosition: -1,
+        })
+      ).rejects.toThrow(ValidationError);
+    });
+
+    it("should reject move if user is unauthorized", async () => {
+      vi.spyOn(authServiceMock, "requireCardInBoard").mockRejectedValue(
+        new ForbiddenError("Unauthorized access to workspace")
+      );
+
+      await expect(
+        service.moveCard("ws_1", "board_1", "user_intruder", {
+          cardId: "card_1",
+          sourceColumnId: "col_1",
+          targetColumnId: "col_2",
+          targetPosition: 0,
+        })
+      ).rejects.toThrow(ForbiddenError);
+    });
+
+    it("should reject move if destination column belongs to another board", async () => {
+      vi.spyOn(authServiceMock, "requireColumnInBoard").mockImplementation(async (colId) => {
+        if (colId === "col_other_board") {
+          throw new NotFoundError("Column does not belong to board");
+        }
+        return {
+          column: {
+            id: colId,
+            boardId: "board_1",
+            title: "Column",
+            position: 0,
+            color: null,
+            createdAt: new Date(),
+            updatedAt: new Date(),
+          },
+          board: {
+            id: "board_1",
+            workspaceId: "ws_1",
+            title: "Board",
+            description: null,
+            position: 0,
+            createdAt: new Date(),
+            updatedAt: new Date(),
+          },
+          workspace: {
+            id: "ws_1",
+            name: "WS",
+            slug: "ws",
+            urlIdentifier: "ws",
+            description: null,
+            ownerId: "user_1",
+            createdAt: new Date(),
+            updatedAt: new Date(),
+          },
+          auth: {
+            member: {
+              id: "mem_1",
+              workspaceId: "ws_1",
+              userId: "user_1",
+              role: "MEMBER",
+              createdAt: new Date(),
+              updatedAt: new Date(),
+            },
+            role: "MEMBER",
+          },
+        };
+      });
+
+      await expect(
+        service.moveCard("ws_1", "board_1", "user_1", {
+          cardId: "card_1",
+          sourceColumnId: "col_1",
+          targetColumnId: "col_other_board",
+          targetPosition: 0,
+        })
+      ).rejects.toThrow(NotFoundError);
     });
   });
 });
