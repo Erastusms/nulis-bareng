@@ -116,6 +116,16 @@ export function getRedisSubscriberClient(customUrl?: string): Redis {
 }
 
 /**
+ * Gets the general purpose / publisher Redis client, or null if Redis is disabled.
+ */
+export function getRedisClient(customUrl?: string): Redis | null {
+  if (process.env.ENABLE_REDIS === "false") {
+    return null;
+  }
+  return getRedisPublisherClient(customUrl);
+}
+
+/**
  * Gracefully disconnects all singleton Redis client connections.
  */
 export async function closeRedisClients(): Promise<void> {

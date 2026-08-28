@@ -12,7 +12,7 @@ export default defineConfig({
     coverage: {
       provider: "v8",
       reporter: ["text", "json", "html"],
-      exclude: ["node_modules/", "src/test/", "**/*.d.ts"],
+      exclude: ["node_modules/", ".next/", "coverage/", "src/test/", "**/*.d.ts"],
     },
   },
   resolve: {

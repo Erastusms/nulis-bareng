@@ -15,3 +15,6 @@ export function toSafeUser(user: PrismaUser): User {
     updatedAt: user.updatedAt.toISOString(),
   };
 }
+
+export const serializeUser = toSafeUser;
+

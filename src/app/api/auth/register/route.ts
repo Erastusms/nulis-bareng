@@ -3,9 +3,13 @@ import { registerSchema } from "@/features/auth/schemas/auth.schema";
 import { errorResponse, successResponse } from "@/server/api/route-handler";
 import { setSessionTokenCookie } from "@/server/auth/cookies";
 import { authService } from "@/server/modules/auth/auth.service";
+import { getClientIp, rateLimiter, RATE_LIMIT_PRESETS } from "@/server/security/rate-limiter";
 
 export async function POST(request: NextRequest) {
   try {
+    const ip = getClientIp(request);
+    await rateLimiter.enforce(`register:${ip}`, RATE_LIMIT_PRESETS.AUTH);
+
     const json = await request.json();
     const validatedInput = registerSchema.parse(json);
 
@@ -22,3 +26,4 @@ export async function POST(request: NextRequest) {
     return errorResponse(error);
   }
 }
+
