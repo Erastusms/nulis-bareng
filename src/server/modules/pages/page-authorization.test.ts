@@ -26,6 +26,7 @@ describe("PageAuthorizationService", () => {
     workspaceId: "ws_1",
     title: "Project Notes",
     content: { type: "doc", content: [] },
+    yjsState: null,
     createdAt: new Date(),
     updatedAt: new Date(),
   };

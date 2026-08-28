@@ -323,6 +323,7 @@ export interface PageRecord {
   workspaceId: string;
   title: string;
   content: Record<string, unknown>;
+  yjsState: Uint8Array | null;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -339,11 +340,13 @@ export interface CreatePageData {
   workspaceId: string;
   title?: string;
   content?: Record<string, unknown>;
+  yjsState?: Uint8Array | null;
 }
 
 export interface UpdatePageData {
   title?: string;
   content?: Record<string, unknown>;
+  yjsState?: Uint8Array | null;
 }
 
 export interface IPageRepository {

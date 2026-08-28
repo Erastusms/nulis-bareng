@@ -16,6 +16,7 @@ describe("PageService", () => {
     workspaceId: "ws_1",
     title: "Sprint Notes",
     content: DEFAULT_EMPTY_DOCUMENT,
+    yjsState: null,
     createdAt: new Date("2026-08-28T00:00:00.000Z"),
     updatedAt: new Date("2026-08-28T00:00:00.000Z"),
   };

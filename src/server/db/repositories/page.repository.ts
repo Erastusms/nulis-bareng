@@ -24,6 +24,7 @@ export class PrismaPageRepository implements IPageRepository {
       workspaceId: record.workspaceId,
       title: record.title,
       content: (record.content as Record<string, unknown>) ?? DEFAULT_EMPTY_DOCUMENT,
+      yjsState: record.yjsState ? new Uint8Array(record.yjsState) : null,
       createdAt: record.createdAt,
       updatedAt: record.updatedAt,
     };
@@ -47,12 +48,14 @@ export class PrismaPageRepository implements IPageRepository {
 
   async create(data: CreatePageData): Promise<PageRecord> {
     const content = (data.content ?? DEFAULT_EMPTY_DOCUMENT) as Prisma.InputJsonValue;
+    const yjsState = data.yjsState ? Buffer.from(data.yjsState) : undefined;
 
     const record = await this.prisma.page.create({
       data: {
         workspaceId: data.workspaceId,
         title: data.title !== undefined ? data.title.trim() : "Untitled",
         content,
+        yjsState,
       },
     });
 
@@ -61,6 +64,7 @@ export class PrismaPageRepository implements IPageRepository {
       workspaceId: record.workspaceId,
       title: record.title,
       content: (record.content as Record<string, unknown>) ?? DEFAULT_EMPTY_DOCUMENT,
+      yjsState: record.yjsState ? new Uint8Array(record.yjsState) : null,
       createdAt: record.createdAt,
       updatedAt: record.updatedAt,
     };
@@ -77,6 +81,10 @@ export class PrismaPageRepository implements IPageRepository {
       updatePayload.content = data.content as Prisma.InputJsonValue;
     }
 
+    if (data.yjsState !== undefined) {
+      updatePayload.yjsState = data.yjsState ? Buffer.from(data.yjsState) : null;
+    }
+
     const record = await this.prisma.page.update({
       where: { id },
       data: updatePayload,
@@ -87,6 +95,7 @@ export class PrismaPageRepository implements IPageRepository {
       workspaceId: record.workspaceId,
       title: record.title,
       content: (record.content as Record<string, unknown>) ?? DEFAULT_EMPTY_DOCUMENT,
+      yjsState: record.yjsState ? new Uint8Array(record.yjsState) : null,
       createdAt: record.createdAt,
       updatedAt: record.updatedAt,
     };

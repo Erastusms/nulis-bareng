@@ -26,9 +26,14 @@
   },
   "dependencies": {
     "@hello-pangea/dnd": "^18.0.1",
+    "@hocuspocus/extension-redis": "^4.6.0",
+    "@hocuspocus/provider": "^4.6.0",
+    "@hocuspocus/server": "^4.6.0",
     "@prisma/client": "6.4.1",
     "@tanstack/react-query": "^5.66.9",
     "@tanstack/react-query-devtools": "^5.66.9",
+    "@tiptap/extension-collaboration": "^3.30.5",
+    "@tiptap/extension-collaboration-cursor": "^3.0.0",
     "@tiptap/extension-link": "^3.30.5",
     "@tiptap/extension-placeholder": "^3.30.5",
     "@tiptap/extension-task-item": "^3.30.5",
@@ -47,6 +52,7 @@
     "react-dom": "^19.0.0",
     "tailwind-merge": "^3.0.1",
     "ws": "^8.21.3",
+    "yjs": "^13.6.32",
     "zod": "^3.24.2"
   },
   "devDependencies": {

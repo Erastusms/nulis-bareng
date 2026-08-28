@@ -1,11 +1,16 @@
 import { initWebSocketServer, stopWebSocketServer } from "../src/server/websocket/standalone-init";
+import { initCollaborationServer, stopCollaborationServer } from "../src/server/collaboration/standalone-collab";
 import { wsLogger } from "../src/server/websocket/logger";
 
 initWebSocketServer();
+initCollaborationServer().catch((err) => {
+  wsLogger.error("Failed to start collaboration server in runner script", err);
+});
 
 const handleShutdown = async (signal: string) => {
-  wsLogger.info(`${signal} received, shutting down WebSocket server and Redis connections...`);
+  wsLogger.info(`${signal} received, shutting down real-time and collaboration servers...`);
   try {
+    await stopCollaborationServer();
     await stopWebSocketServer();
     process.exit(0);
   } catch (err) {

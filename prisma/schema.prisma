@@ -192,6 +192,7 @@ model Page {
   workspaceId String    @map("workspace_id")
   title       String    @default("Untitled")
   content     Json      @default("{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\"}]}")
+  yjsState    Bytes?    @map("yjs_state")
   createdAt   DateTime  @default(now()) @map("created_at")
   updatedAt   DateTime  @updatedAt @map("updated_at")
 
