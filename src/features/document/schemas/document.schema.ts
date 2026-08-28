@@ -1,15 +1,28 @@
 import { z } from "zod";
+import { DEFAULT_EMPTY_DOCUMENT } from "./document-validator";
 
-export const createDocumentSchema = z.object({
-  workspaceId: z.string().min(1, "Workspace ID is required"),
-  parentId: z.string().optional().nullable(),
-  title: z.string().min(1, "Document title is required").max(200),
-  content: z.string().default(""),
-  icon: z.string().optional().nullable(),
-  coverImage: z.string().url().optional().nullable(),
+export const createPageSchema = z.object({
+  title: z.string().max(200, "Title must not exceed 200 characters").optional().default("Untitled"),
+  content: z.record(z.unknown()).optional().default(DEFAULT_EMPTY_DOCUMENT),
 });
 
-export const updateDocumentSchema = createDocumentSchema.partial();
+export const updatePageSchema = z.object({
+  title: z.string().max(200, "Title must not exceed 200 characters").optional(),
+  content: z.record(z.unknown()).optional(),
+});
 
-export type CreateDocumentInput = z.infer<typeof createDocumentSchema>;
-export type UpdateDocumentInput = z.infer<typeof updateDocumentSchema>;
+export interface CreatePageInput {
+  title?: string;
+  content?: Record<string, unknown>;
+}
+
+export interface UpdatePageInput {
+  title?: string;
+  content?: Record<string, unknown>;
+}
+
+// Aliases for compatibility
+export const createDocumentSchema = createPageSchema;
+export const updateDocumentSchema = updatePageSchema;
+export type CreateDocumentInput = CreatePageInput;
+export type UpdateDocumentInput = UpdatePageInput;

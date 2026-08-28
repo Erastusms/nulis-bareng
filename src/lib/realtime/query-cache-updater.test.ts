@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import { QueryClient } from "@tanstack/react-query";
-import { boardKeys, workspaceKeys } from "@/lib/query/query-keys";
-import type { Board, WorkspaceMember } from "@/types/domain";
+import { boardKeys, documentKeys, workspaceKeys } from "@/lib/query/query-keys";
+import type { Board, Page, PageSummary, WorkspaceMember } from "@/types/domain";
 import { RealtimeCacheUpdater } from "./query-cache-updater";
 import type {
   BoardUpdatedEvent,
@@ -14,7 +14,11 @@ import type {
   ColumnUpdatedEvent,
   MemberAddedEvent,
   MemberRemovedEvent,
+  PageCreatedEvent,
+  PageDeletedEvent,
+  PageUpdatedEvent,
 } from "./events";
+
 
 describe("RealtimeCacheUpdater", () => {
   let queryClient: QueryClient;
@@ -463,4 +467,101 @@ describe("RealtimeCacheUpdater", () => {
     const board = queryClient.getQueryData<Board>(boardKeys.detail("board_1"));
     expect(board?.columns?.[0].cards?.[0].title).toBe("Newer Title");
   });
+
+  describe("Page Domain Events", () => {
+    const initialPage: Page = {
+      id: "page_1",
+      workspaceId: "ws_1",
+      title: "Initial Page",
+      content: { type: "doc", content: [] },
+      createdAt: "2026-08-28T00:00:00Z",
+      updatedAt: "2026-08-28T00:00:00Z",
+    };
+
+    const initialSummary: PageSummary = {
+      id: "page_1",
+      workspaceId: "ws_1",
+      title: "Initial Page",
+      createdAt: "2026-08-28T00:00:00Z",
+      updatedAt: "2026-08-28T00:00:00Z",
+    };
+
+    it("should handle page.created event by adding to workspace page list", () => {
+      queryClient.setQueryData<PageSummary[]>(documentKeys.lists("ws_1"), [initialSummary]);
+
+      const newSummary: PageSummary = {
+        id: "page_2",
+        workspaceId: "ws_1",
+        title: "Second Page",
+        createdAt: "2026-08-28T01:00:00Z",
+        updatedAt: "2026-08-28T01:00:00Z",
+      };
+
+      const event: PageCreatedEvent = {
+        eventId: "evt_page_create",
+        type: "page.created",
+        workspaceId: "ws_1",
+        pageId: "page_2",
+        page: newSummary,
+        version: 1,
+        timestamp: "2026-08-28T01:00:00Z",
+      };
+
+      cacheUpdater.applyEvent(queryClient, event);
+
+      const pages = queryClient.getQueryData<PageSummary[]>(documentKeys.lists("ws_1"));
+      expect(pages).toHaveLength(2);
+      expect(pages?.[0].id).toBe("page_2");
+    });
+
+    it("should handle page.updated event in both list and detail query cache", () => {
+      queryClient.setQueryData<PageSummary[]>(documentKeys.lists("ws_1"), [initialSummary]);
+      queryClient.setQueryData<Page>(documentKeys.detail("page_1"), initialPage);
+
+      const event: PageUpdatedEvent = {
+        eventId: "evt_page_update",
+        type: "page.updated",
+        workspaceId: "ws_1",
+        pageId: "page_1",
+        changes: {
+          title: "Renamed Page",
+          updatedAt: "2026-08-28T02:00:00Z",
+        },
+        version: 2,
+        timestamp: "2026-08-28T02:00:00Z",
+      };
+
+      cacheUpdater.applyEvent(queryClient, event);
+
+      const pages = queryClient.getQueryData<PageSummary[]>(documentKeys.lists("ws_1"));
+      expect(pages?.[0].title).toBe("Renamed Page");
+
+      const pageDetail = queryClient.getQueryData<Page>(documentKeys.detail("page_1"));
+      expect(pageDetail?.title).toBe("Renamed Page");
+      expect(pageDetail?.updatedAt).toBe("2026-08-28T02:00:00Z");
+    });
+
+    it("should handle page.deleted event by removing from list and invalidating detail cache", () => {
+      queryClient.setQueryData<PageSummary[]>(documentKeys.lists("ws_1"), [initialSummary]);
+      queryClient.setQueryData<Page>(documentKeys.detail("page_1"), initialPage);
+
+      const event: PageDeletedEvent = {
+        eventId: "evt_page_del",
+        type: "page.deleted",
+        workspaceId: "ws_1",
+        pageId: "page_1",
+        version: 3,
+        timestamp: "2026-08-28T03:00:00Z",
+      };
+
+      cacheUpdater.applyEvent(queryClient, event);
+
+      const pages = queryClient.getQueryData<PageSummary[]>(documentKeys.lists("ws_1"));
+      expect(pages).toHaveLength(0);
+
+      const pageDetail = queryClient.getQueryData<Page>(documentKeys.detail("page_1"));
+      expect(pageDetail).toBeUndefined();
+    });
+  });
 });
+

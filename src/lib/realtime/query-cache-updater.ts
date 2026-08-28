@@ -1,7 +1,8 @@
 import type { QueryClient } from "@tanstack/react-query";
-import { boardKeys, workspaceKeys } from "@/lib/query/query-keys";
-import type { Board, BoardColumn, Card, WorkspaceMember } from "@/types/domain";
+import { boardKeys, documentKeys, workspaceKeys } from "@/lib/query/query-keys";
+import type { Board, BoardColumn, Card, Page, PageSummary, WorkspaceMember } from "@/types/domain";
 import type { RealtimeDomainEvent } from "./events";
+
 
 export class RealtimeCacheUpdater {
   private processedEventIds = new Set<string>();
@@ -75,6 +76,15 @@ export class RealtimeCacheUpdater {
       case "member.removed":
         this.handleMemberRemoved(queryClient, event);
         break;
+      case "page.created":
+        this.handlePageCreated(queryClient, event);
+        break;
+      case "page.updated":
+        this.handlePageUpdated(queryClient, event);
+        break;
+      case "page.deleted":
+        this.handlePageDeleted(queryClient, event);
+        break;
     }
 
     return true;
@@ -96,6 +106,10 @@ export class RealtimeCacheUpdater {
       case "member.added":
       case "member.removed":
         return `member:${event.memberId}`;
+      case "page.created":
+      case "page.updated":
+      case "page.deleted":
+        return `page:${event.pageId}`;
     }
   }
 
@@ -325,6 +339,74 @@ export class RealtimeCacheUpdater {
       }
     );
   }
+
+  private handlePageCreated(
+    queryClient: QueryClient,
+    event: Extract<RealtimeDomainEvent, { type: "page.created" }>
+  ): void {
+    queryClient.setQueryData<PageSummary[]>(
+      documentKeys.lists(event.workspaceId),
+      (oldPages) => {
+        if (!oldPages) return [event.page];
+        if (oldPages.some((p) => p.id === event.pageId)) {
+          return oldPages.map((p) => (p.id === event.pageId ? event.page : p));
+        }
+        return [event.page, ...oldPages];
+      }
+    );
+  }
+
+  private handlePageUpdated(
+    queryClient: QueryClient,
+    event: Extract<RealtimeDomainEvent, { type: "page.updated" }>
+  ): void {
+    // 1. Update the summary in the workspace pages list query cache
+    queryClient.setQueryData<PageSummary[]>(
+      documentKeys.lists(event.workspaceId),
+      (oldPages) => {
+        if (!oldPages) return oldPages;
+        return oldPages.map((p) =>
+          p.id === event.pageId
+            ? {
+                ...p,
+                ...(event.changes.title !== undefined && { title: event.changes.title }),
+                ...(event.changes.updatedAt !== undefined && { updatedAt: event.changes.updatedAt }),
+              }
+            : p
+        );
+      }
+    );
+
+    // 2. Update the page detail query cache
+    queryClient.setQueryData<Page>(
+      documentKeys.detail(event.pageId),
+      (oldPage) => {
+        if (!oldPage) return oldPage;
+        return {
+          ...oldPage,
+          ...event.changes,
+        };
+      }
+    );
+  }
+
+  private handlePageDeleted(
+    queryClient: QueryClient,
+    event: Extract<RealtimeDomainEvent, { type: "page.deleted" }>
+  ): void {
+    // 1. Remove from workspace pages list query cache
+    queryClient.setQueryData<PageSummary[]>(
+      documentKeys.lists(event.workspaceId),
+      (oldPages) => {
+        if (!oldPages) return oldPages;
+        return oldPages.filter((p) => p.id !== event.pageId);
+      }
+    );
+
+    // 2. Invalidate or remove detail cache
+    queryClient.removeQueries({ queryKey: documentKeys.detail(event.pageId) });
+  }
 }
 
 export const realtimeCacheUpdater = new RealtimeCacheUpdater();
+

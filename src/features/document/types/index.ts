@@ -1,2 +1,7 @@
-export type { Document } from "@/types/domain";
-export type { CreateDocumentInput, UpdateDocumentInput } from "../schemas/document.schema";
+export type { Document, Page, PageSummary, PageDocContent } from "@/types/domain";
+export type {
+  CreatePageInput,
+  UpdatePageInput,
+  CreateDocumentInput,
+  UpdateDocumentInput,
+} from "../schemas/document.schema";

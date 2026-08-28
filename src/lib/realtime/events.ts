@@ -1,5 +1,6 @@
 import { z } from "zod";
-import type { Board, BoardColumn, Card, WorkspaceMember } from "@/types/domain";
+import type { Board, BoardColumn, Card, Page, PageSummary, WorkspaceMember } from "@/types/domain";
+
 
 /**
  * Generates a unique event identifier.
@@ -126,6 +127,27 @@ export interface MemberRemovedEvent extends BaseRealtimeEvent {
   memberId: string;
 }
 
+// ---------------------------------------------------------------------------
+// Page Domain Events
+// ---------------------------------------------------------------------------
+
+export interface PageCreatedEvent extends BaseRealtimeEvent {
+  type: "page.created";
+  pageId: string;
+  page: PageSummary;
+}
+
+export interface PageUpdatedEvent extends BaseRealtimeEvent {
+  type: "page.updated";
+  pageId: string;
+  changes: Partial<Pick<Page, "title" | "content" | "updatedAt">>;
+}
+
+export interface PageDeletedEvent extends BaseRealtimeEvent {
+  type: "page.deleted";
+  pageId: string;
+}
+
 /**
  * Discriminated union of all supported domain events.
  */
@@ -139,7 +161,11 @@ export type RealtimeDomainEvent =
   | ColumnDeletedEvent
   | BoardUpdatedEvent
   | MemberAddedEvent
-  | MemberRemovedEvent;
+  | MemberRemovedEvent
+  | PageCreatedEvent
+  | PageUpdatedEvent
+  | PageDeletedEvent;
+
 
 export type RealtimeDomainEventType = RealtimeDomainEvent["type"];
 

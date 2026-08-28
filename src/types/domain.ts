@@ -99,18 +99,35 @@ export interface Card {
   updatedAt: Timestamp;
 }
 
-export interface Document {
+export interface PageDocContent {
+  type: string;
+  content?: Array<Record<string, unknown>>;
+  [key: string]: unknown;
+}
+
+export interface Page {
   id: EntityId;
   workspaceId: EntityId;
-  parentId?: EntityId | null; // For hierarchical documents
   title: string;
-  content: string; // Markdown or rich text JSON
-  icon?: string | null;
-  coverImage?: string | null;
-  authorId: EntityId;
-  isArchived: boolean;
+  content: PageDocContent | Record<string, unknown>;
   createdAt: Timestamp;
   updatedAt: Timestamp;
+}
+
+export interface PageSummary {
+  id: EntityId;
+  workspaceId: EntityId;
+  title: string;
+  createdAt: Timestamp;
+  updatedAt: Timestamp;
+}
+
+export interface Document extends Page {
+  parentId?: EntityId | null;
+  icon?: string | null;
+  coverImage?: string | null;
+  authorId?: EntityId;
+  isArchived?: boolean;
 }
 
 export interface Comment {

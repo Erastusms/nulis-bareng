@@ -5,6 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   ChevronLeft,
+  FileText,
   Kanban,
   LayoutDashboard,
   Settings,
@@ -66,6 +67,12 @@ export function WorkspaceHeader({ workspaceId }: WorkspaceHeaderProps) {
       href: `/workspaces/${workspaceId}/boards`,
       icon: Kanban,
       active: pathname.startsWith(`/workspaces/${workspaceId}/boards`),
+    },
+    {
+      name: "Documents",
+      href: `/workspaces/${workspaceId}/documents`,
+      icon: FileText,
+      active: pathname.startsWith(`/workspaces/${workspaceId}/documents`),
     },
     {
       name: "Members",

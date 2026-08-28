@@ -315,3 +315,43 @@ export interface ICardRepository {
   delete(id: string): Promise<boolean>;
   moveCard(data: MoveCardData): Promise<CardRecord>;
 }
+
+// Page / Document Records & DTOs
+
+export interface PageRecord {
+  id: string;
+  workspaceId: string;
+  title: string;
+  content: Record<string, unknown>;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export interface PageSummaryRecord {
+  id: string;
+  workspaceId: string;
+  title: string;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export interface CreatePageData {
+  workspaceId: string;
+  title?: string;
+  content?: Record<string, unknown>;
+}
+
+export interface UpdatePageData {
+  title?: string;
+  content?: Record<string, unknown>;
+}
+
+export interface IPageRepository {
+  findById(id: string): Promise<PageRecord | null>;
+  findByWorkspaceId(workspaceId: string): Promise<PageSummaryRecord[]>;
+  create(data: CreatePageData): Promise<PageRecord>;
+  update(id: string, data: UpdatePageData): Promise<PageRecord>;
+  delete(id: string): Promise<boolean>;
+  countByWorkspaceId(workspaceId: string): Promise<number>;
+}
+

@@ -68,6 +68,7 @@ model Workspace {
   members       WorkspaceMember[]
   invitations   WorkspaceInvitation[]
   boards        Board[]
+  pages         Page[]
 
   @@index([ownerId])
   @@index([slug])
@@ -185,3 +186,18 @@ model CardAssignee {
   @@index([userId])
   @@map("card_assignees")
 }
+
+model Page {
+  id          String    @id @default(cuid())
+  workspaceId String    @map("workspace_id")
+  title       String    @default("Untitled")
+  content     Json      @default("{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\"}]}")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId])
+  @@map("pages")
+}
+

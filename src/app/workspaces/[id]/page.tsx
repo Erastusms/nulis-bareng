@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useBoards } from "@/features/board/hooks/use-boards";
+import { usePages } from "@/features/document/hooks/use-documents";
 import { useWorkspace } from "@/features/workspace/hooks/use-workspaces";
 import { useWorkspaceMembers } from "@/features/workspace/hooks/use-workspace-members";
 
@@ -18,6 +19,7 @@ export default function WorkspaceOverviewPage() {
   const { data: workspace, isLoading: isWsLoading, error: wsError } = useWorkspace(workspaceId);
   const { data: members, isLoading: isMembersLoading } = useWorkspaceMembers(workspaceId);
   const { data: boards, isLoading: isBoardsLoading } = useBoards(workspaceId);
+  const { data: pages, isLoading: isPagesLoading } = usePages(workspaceId);
 
   if (isWsLoading) {
     return (
@@ -104,7 +106,7 @@ export default function WorkspaceOverviewPage() {
           </CardContent>
         </Card>
 
-        {/* Documents Placeholder */}
+        {/* Documents Module */}
         <Card className="transition-all hover:border-primary/50">
           <CardHeader className="space-y-1 pb-3">
             <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-amber-500/10 text-amber-600 dark:text-amber-400">
@@ -112,14 +114,18 @@ export default function WorkspaceOverviewPage() {
             </div>
             <CardTitle className="text-base pt-2">Documents</CardTitle>
             <CardDescription className="text-xs">
-              Phase 5: Real-time collaborative documents and notes.
+              {isPagesLoading
+                ? "Loading documents..."
+                : `${pages?.length || 0} rich-text documents and notes`}
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <Button variant="outline" size="sm" disabled className="w-full justify-between gap-1 text-xs">
-              <span>Coming in Phase 5</span>
-              <ArrowRight className="h-3.5 w-3.5" />
-            </Button>
+            <Link href={`/workspaces/${workspaceId}/documents`}>
+              <Button variant="outline" size="sm" className="w-full justify-between gap-1 text-xs">
+                <span>Open Documents</span>
+                <ArrowRight className="h-3.5 w-3.5" />
+              </Button>
+            </Link>
           </CardContent>
         </Card>
       </div>
