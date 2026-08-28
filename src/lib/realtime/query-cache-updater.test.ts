@@ -514,6 +514,34 @@ describe("RealtimeCacheUpdater", () => {
       expect(pages?.[0].id).toBe("page_2");
     });
 
+    it("should handle page.created event when list query is keyed by workspace slug/urlIdentifier", () => {
+      queryClient.setQueryData<PageSummary[]>(documentKeys.lists("my-workspace-slug"), [initialSummary]);
+
+      const newSummary: PageSummary = {
+        id: "page_3",
+        workspaceId: "ws_canonical_id",
+        title: "Third Page",
+        createdAt: "2026-08-28T01:00:00Z",
+        updatedAt: "2026-08-28T01:00:00Z",
+      };
+
+      const event: PageCreatedEvent = {
+        eventId: "evt_page_create_slug",
+        type: "page.created",
+        workspaceId: "ws_canonical_id",
+        pageId: "page_3",
+        page: newSummary,
+        version: 1,
+        timestamp: "2026-08-28T01:00:00Z",
+      };
+
+      cacheUpdater.applyEvent(queryClient, event);
+
+      const pages = queryClient.getQueryData<PageSummary[]>(documentKeys.lists("my-workspace-slug"));
+      expect(pages).toHaveLength(2);
+      expect(pages?.[0].id).toBe("page_3");
+    });
+
     it("should handle page.updated event in both list and detail query cache", () => {
       queryClient.setQueryData<PageSummary[]>(documentKeys.lists("ws_1"), [initialSummary]);
       queryClient.setQueryData<Page>(documentKeys.detail("page_1"), initialPage);

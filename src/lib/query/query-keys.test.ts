@@ -12,6 +12,7 @@ describe("Query Key Factories", () => {
 
   it("should generate consistent board query keys", () => {
     expect(boardKeys.all).toEqual(["boards"]);
+    expect(boardKeys.allLists()).toEqual(["boards", "list"]);
     expect(boardKeys.lists("ws-1")).toEqual(["boards", "list", "ws-1"]);
     expect(boardKeys.detail("b-1")).toEqual(["boards", "detail", "b-1"]);
     expect(boardKeys.cards("b-1")).toEqual(["boards", "detail", "b-1", "cards"]);
@@ -20,6 +21,8 @@ describe("Query Key Factories", () => {
 
   it("should generate consistent document query keys", () => {
     expect(documentKeys.all).toEqual(["documents"]);
+    expect(documentKeys.allLists()).toEqual(["documents", "list"]);
+    expect(documentKeys.lists("ws-1")).toEqual(["documents", "list", "ws-1"]);
     expect(documentKeys.detail("doc-1")).toEqual(["documents", "detail", "doc-1"]);
   });
 

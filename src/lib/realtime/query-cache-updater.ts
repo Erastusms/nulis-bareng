@@ -303,7 +303,7 @@ export class RealtimeCacheUpdater {
       };
     });
 
-    queryClient.setQueryData<Board[]>(boardKeys.lists(event.workspaceId), (oldBoards) => {
+    queryClient.setQueriesData<Board[]>({ queryKey: boardKeys.allLists() }, (oldBoards) => {
       if (!oldBoards) return oldBoards;
       return oldBoards.map((b) => (b.id === event.boardId ? { ...b, ...event.changes } : b));
     });
@@ -313,10 +313,10 @@ export class RealtimeCacheUpdater {
     queryClient: QueryClient,
     event: Extract<RealtimeDomainEvent, { type: "member.added" }>
   ): void {
-    queryClient.setQueryData<WorkspaceMember[]>(
-      workspaceKeys.members(event.workspaceId),
+    queryClient.setQueriesData<WorkspaceMember[]>(
+      { queryKey: workspaceKeys.details() },
       (oldMembers) => {
-        if (!oldMembers) return [event.member];
+        if (!oldMembers || !Array.isArray(oldMembers)) return oldMembers;
         if (oldMembers.some((m) => m.id === event.memberId || m.userId === event.member.userId)) {
           return oldMembers.map((m) => (m.id === event.memberId ? event.member : m));
         }
@@ -329,10 +329,10 @@ export class RealtimeCacheUpdater {
     queryClient: QueryClient,
     event: Extract<RealtimeDomainEvent, { type: "member.removed" }>
   ): void {
-    queryClient.setQueryData<WorkspaceMember[]>(
-      workspaceKeys.members(event.workspaceId),
+    queryClient.setQueriesData<WorkspaceMember[]>(
+      { queryKey: workspaceKeys.details() },
       (oldMembers) => {
-        if (!oldMembers) return oldMembers;
+        if (!oldMembers || !Array.isArray(oldMembers)) return oldMembers;
         return oldMembers.filter(
           (m) => m.id !== event.memberId && m.userId !== event.memberId
         );
@@ -344,27 +344,37 @@ export class RealtimeCacheUpdater {
     queryClient: QueryClient,
     event: Extract<RealtimeDomainEvent, { type: "page.created" }>
   ): void {
-    queryClient.setQueryData<PageSummary[]>(
-      documentKeys.lists(event.workspaceId),
+    // 1. Update all matching pages list queries (regardless of whether workspace is keyed by ID, slug, or urlIdentifier)
+    queryClient.setQueriesData<PageSummary[]>(
+      { queryKey: documentKeys.allLists() },
       (oldPages) => {
-        if (!oldPages) return [event.page];
+        if (!oldPages || !Array.isArray(oldPages)) return [event.page];
         if (oldPages.some((p) => p.id === event.pageId)) {
           return oldPages.map((p) => (p.id === event.pageId ? event.page : p));
         }
         return [event.page, ...oldPages];
       }
     );
+
+    // 2. Set detail query
+    queryClient.setQueryData<Page>(
+      documentKeys.detail(event.pageId),
+      (oldPage) => (oldPage ? { ...oldPage, title: event.page.title } : undefined)
+    );
+
+    // 3. Invalidate to guarantee synchronization across active listeners
+    queryClient.invalidateQueries({ queryKey: documentKeys.allLists() });
   }
 
   private handlePageUpdated(
     queryClient: QueryClient,
     event: Extract<RealtimeDomainEvent, { type: "page.updated" }>
   ): void {
-    // 1. Update the summary in the workspace pages list query cache
-    queryClient.setQueryData<PageSummary[]>(
-      documentKeys.lists(event.workspaceId),
+    // 1. Update all matching pages list queries
+    queryClient.setQueriesData<PageSummary[]>(
+      { queryKey: documentKeys.allLists() },
       (oldPages) => {
-        if (!oldPages) return oldPages;
+        if (!oldPages || !Array.isArray(oldPages)) return oldPages;
         return oldPages.map((p) =>
           p.id === event.pageId
             ? {
@@ -394,11 +404,11 @@ export class RealtimeCacheUpdater {
     queryClient: QueryClient,
     event: Extract<RealtimeDomainEvent, { type: "page.deleted" }>
   ): void {
-    // 1. Remove from workspace pages list query cache
-    queryClient.setQueryData<PageSummary[]>(
-      documentKeys.lists(event.workspaceId),
+    // 1. Remove from all matching pages list queries
+    queryClient.setQueriesData<PageSummary[]>(
+      { queryKey: documentKeys.allLists() },
       (oldPages) => {
-        if (!oldPages) return oldPages;
+        if (!oldPages || !Array.isArray(oldPages)) return oldPages;
         return oldPages.filter((p) => p.id !== event.pageId);
       }
     );

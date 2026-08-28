@@ -2,17 +2,27 @@
  * Collaboration utilities for room naming and user cursor presence.
  */
 
-const CURSOR_COLORS = [
-  "#3b82f6", // Blue
-  "#10b981", // Emerald
-  "#f59e0b", // Amber
-  "#ef4444", // Red
-  "#8b5cf6", // Purple
-  "#ec4899", // Pink
-  "#06b6d4", // Cyan
-  "#f97316", // Orange
-  "#14b8a6", // Teal
-  "#6366f1", // Indigo
+export const CURSOR_COLORS = [
+  "#2563eb", // Blue
+  "#059669", // Emerald Green
+  "#d97706", // Amber
+  "#dc2626", // Red
+  "#7c3aed", // Violet
+  "#db2777", // Pink / Rose
+  "#0891b2", // Cyan
+  "#ea580c", // Orange
+  "#0d9488", // Teal
+  "#4f46e5", // Indigo
+  "#16a34a", // Green
+  "#9333ea", // Bright Purple
+  "#c026d3", // Fuchsia
+  "#0284c7", // Sky Blue
+  "#e11d48", // Crimson
+  "#ca8a04", // Dark Gold
+  "#00838f", // Deep Teal
+  "#512da8", // Deep Purple
+  "#c2185b", // Raspberry
+  "#303f9f", // Dark Indigo
 ];
 
 /**
@@ -44,17 +54,42 @@ export function parseCollabRoomName(
 }
 
 /**
- * Computes a deterministic, distinct color for a user ID for live cursors and presence.
+ * Assigns a unique, randomized, vibrant color for the active browser session or user ID.
+ * In a browser tab, stores the color in sessionStorage so it stays persistent for that tab session
+ * while ensuring multiple users / tabs receive distinct, randomized colors.
  */
-export function getUserColor(userId: string): string {
+export function getRandomUserColor(userId?: string): string {
+  if (typeof window !== "undefined") {
+    try {
+      const storageKey = `collab_cursor_color_${userId || "anon"}`;
+      const saved = sessionStorage.getItem(storageKey);
+      if (saved && CURSOR_COLORS.includes(saved)) {
+        return saved;
+      }
+      const randomIndex = Math.floor(Math.random() * CURSOR_COLORS.length);
+      const chosenColor = CURSOR_COLORS[randomIndex];
+      sessionStorage.setItem(storageKey, chosenColor);
+      return chosenColor;
+    } catch {
+      // Ignore storage errors in private browsing modes
+    }
+  }
+
   if (!userId) return CURSOR_COLORS[0];
 
   let hash = 0;
   for (let i = 0; i < userId.length; i++) {
     hash = (hash << 5) - hash + userId.charCodeAt(i);
-    hash |= 0; // Convert to 32bit integer
+    hash |= 0;
   }
 
   const index = Math.abs(hash) % CURSOR_COLORS.length;
   return CURSOR_COLORS[index];
+}
+
+/**
+ * Computes a color for a user ID for live cursors and presence.
+ */
+export function getUserColor(userId?: string): string {
+  return getRandomUserColor(userId);
 }

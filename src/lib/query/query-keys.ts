@@ -14,7 +14,11 @@ export const workspaceKeys = {
 
 export const boardKeys = {
   all: ["boards"] as const,
-  lists: (workspaceId?: string) => [...boardKeys.all, "list", workspaceId] as const,
+  allLists: () => [...boardKeys.all, "list"] as const,
+  lists: (workspaceId?: string) =>
+    workspaceId
+      ? ([...boardKeys.all, "list", workspaceId] as const)
+      : ([...boardKeys.all, "list"] as const),
   details: () => [...boardKeys.all, "detail"] as const,
   detail: (id: string) => [...boardKeys.details(), id] as const,
   columns: (boardId: string) => [...boardKeys.detail(boardId), "columns"] as const,
@@ -24,7 +28,11 @@ export const boardKeys = {
 
 export const documentKeys = {
   all: ["documents"] as const,
-  lists: (workspaceId?: string) => [...documentKeys.all, "list", workspaceId] as const,
+  allLists: () => [...documentKeys.all, "list"] as const,
+  lists: (workspaceId?: string) =>
+    workspaceId
+      ? ([...documentKeys.all, "list", workspaceId] as const)
+      : ([...documentKeys.all, "list"] as const),
   details: () => [...documentKeys.all, "detail"] as const,
   detail: (id: string) => [...documentKeys.details(), id] as const,
 };
