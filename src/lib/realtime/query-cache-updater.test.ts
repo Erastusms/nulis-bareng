@@ -1,9 +1,10 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import { QueryClient } from "@tanstack/react-query";
-import { boardKeys, documentKeys, workspaceKeys } from "@/lib/query/query-keys";
-import type { Board, Page, PageSummary, WorkspaceMember } from "@/types/domain";
+import { activityKeys, boardKeys, documentKeys, presenceKeys, workspaceKeys } from "@/lib/query/query-keys";
+import type { Activity, Board, Page, PageSummary, PaginatedActivities, UserPresence, WorkspaceMember } from "@/types/domain";
 import { RealtimeCacheUpdater } from "./query-cache-updater";
 import type {
+  ActivityCreatedEvent,
   BoardUpdatedEvent,
   CardCreatedEvent,
   CardDeletedEvent,
@@ -17,7 +18,9 @@ import type {
   PageCreatedEvent,
   PageDeletedEvent,
   PageUpdatedEvent,
+  PresenceUpdatedEvent,
 } from "./events";
+
 
 
 describe("RealtimeCacheUpdater", () => {
@@ -591,5 +594,104 @@ describe("RealtimeCacheUpdater", () => {
       expect(pageDetail).toBeUndefined();
     });
   });
+
+  describe("Activity Events", () => {
+    it("should prepend activity to infinite query cache upon activity.created event", () => {
+      const initialActivity: Activity = {
+        id: "act_1",
+        workspaceId: "ws_1",
+        actorId: "u_1",
+        type: "WORKSPACE_CREATED",
+        createdAt: "2026-08-28T01:00:00Z",
+      };
+
+      queryClient.setQueryData(activityKeys.list("ws_1", { limit: 20 }), {
+        pages: [
+          {
+            items: [initialActivity],
+            nextCursor: null,
+          },
+        ],
+        pageParams: [undefined],
+      });
+
+      const newActivity: Activity = {
+        id: "act_2",
+        workspaceId: "ws_1",
+        actorId: "u_2",
+        type: "CARD_CREATED",
+        entityType: "CARD",
+        entityId: "card_10",
+        metadata: { cardTitle: "New Feature" },
+        createdAt: "2026-08-28T02:00:00Z",
+      };
+
+      const event: ActivityCreatedEvent = {
+        eventId: "evt_act_2",
+        type: "activity.created",
+        workspaceId: "ws_1",
+        activity: newActivity,
+        version: 1,
+        timestamp: "2026-08-28T02:00:00Z",
+      };
+
+      const applied = cacheUpdater.applyEvent(queryClient, event);
+      expect(applied).toBe(true);
+
+      const cached = queryClient.getQueryData<any>(activityKeys.list("ws_1", { limit: 20 }));
+      expect(cached.pages[0].items).toHaveLength(2);
+      expect(cached.pages[0].items[0].id).toBe("act_2");
+      expect(cached.pages[0].items[1].id).toBe("act_1");
+    });
+  });
+
+  describe("Presence Events", () => {
+    it("should update workspace presence and individual user presence upon presence.updated event", () => {
+      const initialPresence: UserPresence[] = [
+        { userId: "u_1", status: "ONLINE", lastSeenAt: "2026-08-28T01:00:00Z" },
+        { userId: "u_2", status: "ONLINE", lastSeenAt: "2026-08-28T01:00:00Z" },
+      ];
+
+      queryClient.setQueryData(presenceKeys.workspace("ws_1"), initialPresence);
+
+      const event: PresenceUpdatedEvent = {
+        eventId: "evt_pres_1",
+        type: "presence.updated",
+        workspaceId: "ws_1",
+        userId: "u_2",
+        status: "AWAY",
+        lastSeenAt: "2026-08-28T02:00:00Z",
+        version: 1,
+        timestamp: "2026-08-28T02:00:00Z",
+      };
+
+      const applied = cacheUpdater.applyEvent(queryClient, event);
+      expect(applied).toBe(true);
+
+      const presences = queryClient.getQueryData<UserPresence[]>(presenceKeys.workspace("ws_1"));
+      expect(presences).toHaveLength(2);
+      expect(presences?.find((p) => p.userId === "u_2")?.status).toBe("AWAY");
+      expect(presences?.find((p) => p.userId === "u_1")?.status).toBe("ONLINE");
+
+      const userPresence = queryClient.getQueryData<UserPresence>(presenceKeys.user("u_2"));
+      expect(userPresence?.status).toBe("AWAY");
+    });
+
+    it("should set batch initial workspace presence state", () => {
+      const initialPresence: UserPresence[] = [
+        { userId: "u_1", status: "ONLINE", lastSeenAt: "2026-08-28T01:00:00Z" },
+        { userId: "u_2", status: "AWAY", lastSeenAt: "2026-08-28T01:00:00Z" },
+      ];
+
+      cacheUpdater.setWorkspacePresenceState(queryClient, "ws_1", initialPresence);
+
+      const presences = queryClient.getQueryData<UserPresence[]>(presenceKeys.workspace("ws_1"));
+      expect(presences).toEqual(initialPresence);
+
+      expect(queryClient.getQueryData(presenceKeys.user("u_1"))).toEqual(initialPresence[0]);
+      expect(queryClient.getQueryData(presenceKeys.user("u_2"))).toEqual(initialPresence[1]);
+    });
+  });
 });
+
 

@@ -2,12 +2,17 @@ import { WebSocket, WebSocketServer, type ServerOptions } from "ws";
 import type { IncomingMessage } from "http";
 import {
   clientMessageSchema,
+  createEventId,
+  createVersion,
   type ErrorMessage,
   type PongMessage,
+  type PresenceStateMessage,
   type SubscribedMessage,
   type UnsubscribedMessage,
 } from "@/lib/realtime/events";
-import { redisSubscriber, RedisSubscriber } from "../redis";
+import { workspaceMemberRepository } from "@/server/db/repositories/workspace-member.repository";
+import { presenceService as defaultPresenceService, PresenceService, redisSubscriber, RedisSubscriber } from "../redis";
+import { eventPublisher as defaultEventPublisher, IEventPublisher } from "./event-publisher";
 import { authenticateWebSocket, authorizeWorkspaceSubscription } from "./auth";
 import { connectionManager, ConnectionManager } from "./connection-manager";
 import { roomManager, RoomManager } from "./room-manager";
@@ -17,17 +22,21 @@ export interface CreateWebSocketServerOptions extends ServerOptions {
   connManager?: ConnectionManager;
   rooms?: RoomManager;
   subscriber?: RedisSubscriber;
+  presence?: PresenceService;
+  publisher?: IEventPublisher;
 }
 
 /**
  * Creates and initializes a WebSocket Server instance with full authentication,
- * room routing, message validation, and dynamic Redis Pub/Sub integration.
+ * room routing, message validation, dynamic Redis Pub/Sub, and Presence lifecycle integration.
  */
 export function createWebSocketServer(options: CreateWebSocketServerOptions = {}): WebSocketServer {
   const {
     connManager = connectionManager,
     rooms = roomManager,
     subscriber = redisSubscriber,
+    presence = defaultPresenceService,
+    publisher = defaultEventPublisher,
     ...wsOptions
   } = options;
 
@@ -77,8 +86,11 @@ export function createWebSocketServer(options: CreateWebSocketServerOptions = {}
       return;
     }
 
-    // 2. Register connection
+    // 2. Register connection & initial presence
     const clientConn = connManager.addConnection(socket, user);
+    await presence.setUserOnline(user.id, clientConn.id, "ONLINE").catch((err) => {
+      wsLogger.error("Failed to register presence on connection", err, { userId: user.id });
+    });
 
     // 3. Message handling
     socket.on("message", async (data) => {
@@ -119,6 +131,48 @@ export function createWebSocketServer(options: CreateWebSocketServerOptions = {}
         if (message.type === "ping") {
           const pong: PongMessage = { type: "pong" };
           socket.send(JSON.stringify(pong));
+          // Ping also refreshes presence heartbeat
+          await presence.heartbeat(user.id, clientConn.id).catch(() => {});
+          return;
+        }
+
+        if (message.type === "heartbeat") {
+          const refreshed = await presence.heartbeat(user.id, clientConn.id, message.status);
+          const pong: PongMessage = { type: "pong" };
+          socket.send(JSON.stringify(pong));
+
+          // If status was explicitly supplied, broadcast presence update to subscribed rooms
+          if (message.status) {
+            for (const wsId of Array.from(clientConn.subscribedWorkspaces)) {
+              await publisher.publish({
+                eventId: createEventId(),
+                type: "presence.updated",
+                workspaceId: wsId,
+                userId: user.id,
+                status: refreshed.status,
+                lastSeenAt: refreshed.lastSeenAt,
+                version: createVersion(),
+                timestamp: new Date().toISOString(),
+              }).catch(() => {});
+            }
+          }
+          return;
+        }
+
+        if (message.type === "presence.update") {
+          const updated = await presence.setUserStatus(user.id, message.status);
+          for (const wsId of Array.from(clientConn.subscribedWorkspaces)) {
+            await publisher.publish({
+              eventId: createEventId(),
+              type: "presence.updated",
+              workspaceId: wsId,
+              userId: user.id,
+              status: updated.status,
+              lastSeenAt: updated.lastSeenAt,
+              version: createVersion(),
+              timestamp: new Date().toISOString(),
+            }).catch(() => {});
+          }
           return;
         }
 
@@ -151,6 +205,45 @@ export function createWebSocketServer(options: CreateWebSocketServerOptions = {}
             workspaceId: message.workspaceId,
           };
           socket.send(JSON.stringify(subResponse));
+
+          // Send initial presence state of all workspace members to the newly subscribed socket
+          try {
+            const members = await workspaceMemberRepository.findMembersByWorkspaceId(authResult.workspaceId);
+            const memberIds = members.map((m) => m.userId);
+            if (!memberIds.includes(user.id)) {
+              memberIds.push(user.id);
+            }
+            const presenceMap = await presence.getMultipleUsersPresence(memberIds);
+            const initialPresences = Array.from(presenceMap.values());
+
+            const presenceStateMsg: PresenceStateMessage = {
+              type: "presence.state",
+              workspaceId: message.workspaceId,
+              presence: initialPresences,
+            };
+            if (socket.readyState === WebSocket.OPEN) {
+              socket.send(JSON.stringify(presenceStateMsg));
+            }
+          } catch (err) {
+            wsLogger.warn("Failed to load initial workspace presence state", {
+              workspaceId: authResult.workspaceId,
+              error: (err as Error).message,
+            });
+          }
+
+          // Broadcast user's online presence to workspace room
+          const currentPresence = await presence.getUserPresence(user.id);
+          await publisher.publish({
+            eventId: createEventId(),
+            type: "presence.updated",
+            workspaceId: authResult.workspaceId,
+            userId: user.id,
+            status: currentPresence.status,
+            lastSeenAt: currentPresence.lastSeenAt,
+            version: createVersion(),
+            timestamp: new Date().toISOString(),
+          }).catch(() => {});
+
           return;
         }
 
@@ -180,9 +273,34 @@ export function createWebSocketServer(options: CreateWebSocketServerOptions = {}
     });
 
     // 4. Disconnection & error handling
-    const cleanup = () => {
+    const cleanup = async () => {
+      const subscribedWorkspaces = Array.from(clientConn.subscribedWorkspaces);
       rooms.leaveAll(socket, connManager);
       connManager.removeConnection(socket);
+
+      try {
+        const { isOffline } = await presence.removeConnection(user.id, clientConn.id);
+        if (isOffline) {
+          const nowIso = new Date().toISOString();
+          for (const wsId of subscribedWorkspaces) {
+            await publisher.publish({
+              eventId: createEventId(),
+              type: "presence.updated",
+              workspaceId: wsId,
+              userId: user.id,
+              status: "OFFLINE",
+              lastSeenAt: nowIso,
+              version: createVersion(),
+              timestamp: nowIso,
+            }).catch(() => {});
+          }
+        }
+      } catch (err) {
+        wsLogger.error("Error during connection presence cleanup", err, {
+          connectionId: clientConn.id,
+          userId: user.id,
+        });
+      }
     };
 
     socket.on("close", cleanup);
@@ -201,6 +319,7 @@ export function createWebSocketServer(options: CreateWebSocketServerOptions = {}
 }
 
 /**
+
  * Gracefully shuts down a WebSocketServer instance and clears room states.
  */
 export async function closeWebSocketServer(

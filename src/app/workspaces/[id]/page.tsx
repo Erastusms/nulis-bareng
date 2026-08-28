@@ -7,10 +7,12 @@ import { ArrowRight, FileText, Kanban, ShieldCheck, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
+import { ActivityFeed } from "@/features/activity/components/ActivityFeed";
 import { useBoards } from "@/features/board/hooks/use-boards";
 import { usePages } from "@/features/document/hooks/use-documents";
 import { useWorkspace } from "@/features/workspace/hooks/use-workspaces";
 import { useWorkspaceMembers } from "@/features/workspace/hooks/use-workspace-members";
+
 
 export default function WorkspaceOverviewPage() {
   const params = useParams();
@@ -129,6 +131,10 @@ export default function WorkspaceOverviewPage() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Real-time Workspace Activity Feed */}
+      <ActivityFeed workspaceId={workspaceId} limit={10} />
     </div>
   );
 }
+

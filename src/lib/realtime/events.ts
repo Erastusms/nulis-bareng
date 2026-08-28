@@ -1,5 +1,16 @@
 import { z } from "zod";
-import type { Board, BoardColumn, Card, Page, PageSummary, WorkspaceMember } from "@/types/domain";
+import type {
+  Activity,
+  Board,
+  BoardColumn,
+  Card,
+  Page,
+  PageSummary,
+  PresenceStatus,
+  UserPresence,
+  WorkspaceMember,
+} from "@/types/domain";
+
 
 
 /**
@@ -148,6 +159,26 @@ export interface PageDeletedEvent extends BaseRealtimeEvent {
   pageId: string;
 }
 
+// ---------------------------------------------------------------------------
+// Presence Domain Events
+// ---------------------------------------------------------------------------
+
+export interface PresenceUpdatedEvent extends BaseRealtimeEvent {
+  type: "presence.updated";
+  userId: string;
+  status: PresenceStatus;
+  lastSeenAt: string;
+}
+
+// ---------------------------------------------------------------------------
+// Activity Domain Events
+// ---------------------------------------------------------------------------
+
+export interface ActivityCreatedEvent extends BaseRealtimeEvent {
+  type: "activity.created";
+  activity: Activity;
+}
+
 /**
  * Discriminated union of all supported domain events.
  */
@@ -164,7 +195,9 @@ export type RealtimeDomainEvent =
   | MemberRemovedEvent
   | PageCreatedEvent
   | PageUpdatedEvent
-  | PageDeletedEvent;
+  | PageDeletedEvent
+  | PresenceUpdatedEvent
+  | ActivityCreatedEvent;
 
 
 export type RealtimeDomainEventType = RealtimeDomainEvent["type"];
@@ -187,16 +220,30 @@ export const clientPingSchema = z.object({
   type: z.literal("ping"),
 });
 
+export const clientHeartbeatSchema = z.object({
+  type: z.literal("heartbeat"),
+  status: z.enum(["ONLINE", "AWAY"]).optional(),
+});
+
+export const clientPresenceUpdateSchema = z.object({
+  type: z.literal("presence.update"),
+  status: z.enum(["ONLINE", "AWAY"]),
+});
+
 export const clientMessageSchema = z.discriminatedUnion("type", [
   clientSubscribeSchema,
   clientUnsubscribeSchema,
   clientPingSchema,
+  clientHeartbeatSchema,
+  clientPresenceUpdateSchema,
 ]);
 
 export type ClientMessage = z.infer<typeof clientMessageSchema>;
 export type ClientSubscribeMessage = z.infer<typeof clientSubscribeSchema>;
 export type ClientUnsubscribeMessage = z.infer<typeof clientUnsubscribeSchema>;
 export type ClientPingMessage = z.infer<typeof clientPingSchema>;
+export type ClientHeartbeatMessage = z.infer<typeof clientHeartbeatSchema>;
+export type ClientPresenceUpdateMessage = z.infer<typeof clientPresenceUpdateSchema>;
 
 // ---------------------------------------------------------------------------
 // Server -> Client Control Messages
@@ -223,6 +270,12 @@ export interface PongMessage {
   type: "pong";
 }
 
+export interface PresenceStateMessage {
+  type: "presence.state";
+  workspaceId: string;
+  presence: UserPresence[];
+}
+
 /**
  * Union of all possible messages received by a WebSocket client.
  */
@@ -231,7 +284,8 @@ export type RealtimeServerMessage =
   | SubscribedMessage
   | UnsubscribedMessage
   | ErrorMessage
-  | PongMessage;
+  | PongMessage
+  | PresenceStateMessage;
 
 export type RealtimeEventHandler<T extends RealtimeDomainEvent = RealtimeDomainEvent> = (
   event: T
@@ -245,3 +299,4 @@ export interface IRealtimeService {
   subscribe(channel: string, handler: RealtimeEventHandler): RealtimeSubscription;
   publish(channel: string, event: RealtimeDomainEvent): Promise<void>;
 }
+

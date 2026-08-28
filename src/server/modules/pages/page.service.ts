@@ -2,6 +2,7 @@ import { createEventId, createVersion } from "@/lib/realtime/events";
 import { pageRepository } from "@/server/db/repositories/page.repository";
 import type { IPageRepository, PageRecord, PageSummaryRecord } from "@/server/db/repository";
 import { eventPublisher, IEventPublisher } from "@/server/websocket/event-publisher";
+import { activityService as defaultActivityService, ActivityService } from "../activities/activity.service";
 import { pageAuth, PageAuthorizationService } from "./page-authorization";
 import { validateDocumentContent } from "@/features/document/schemas/document-validator";
 import type { Page, PageSummary } from "@/types/domain";
@@ -41,7 +42,8 @@ export class PageService {
   constructor(
     private readonly pageRepo: IPageRepository = pageRepository,
     private readonly authService: PageAuthorizationService = pageAuth,
-    private readonly publisher: IEventPublisher = eventPublisher
+    private readonly publisher: IEventPublisher = eventPublisher,
+    private readonly activityService: ActivityService = defaultActivityService
   ) {}
 
   /**
@@ -109,6 +111,17 @@ export class PageService {
       timestamp: new Date().toISOString(),
     });
 
+    await this.activityService.recordActivity({
+      workspaceId: workspace.id,
+      actorId: userId,
+      type: "DOCUMENT_CREATED",
+      entityType: "DOCUMENT",
+      entityId: domainPage.id,
+      metadata: {
+        documentTitle: domainPage.title,
+      },
+    });
+
     return domainPage;
   }
 
@@ -120,7 +133,7 @@ export class PageService {
     userId: string,
     dto: UpdatePageDTO
   ): Promise<Page> {
-    const { workspace } = await this.authService.requirePageAccess(pageId, userId);
+    const { workspace, page: existingPage } = await this.authService.requirePageAccess(pageId, userId);
 
     let validatedContent: Record<string, unknown> | undefined = undefined;
     if (dto.content !== undefined) {
@@ -148,6 +161,20 @@ export class PageService {
       timestamp: new Date().toISOString(),
     });
 
+    if (dto.title && existingPage && existingPage.title !== domainPage.title) {
+      await this.activityService.recordActivity({
+        workspaceId: workspace.id,
+        actorId: userId,
+        type: "DOCUMENT_RENAMED",
+        entityType: "DOCUMENT",
+        entityId: domainPage.id,
+        metadata: {
+          documentTitle: domainPage.title,
+          previousTitle: existingPage.title,
+        },
+      });
+    }
+
     return domainPage;
   }
 
@@ -155,7 +182,7 @@ export class PageService {
    * Deletes a page from its workspace.
    */
   async deletePage(pageId: string, userId: string): Promise<boolean> {
-    const { workspace } = await this.authService.requirePageAccess(pageId, userId);
+    const { workspace, page } = await this.authService.requirePageAccess(pageId, userId);
 
     const deleted = await this.pageRepo.delete(pageId);
     if (deleted) {
@@ -167,6 +194,17 @@ export class PageService {
         version: createVersion(),
         timestamp: new Date().toISOString(),
       });
+
+      await this.activityService.recordActivity({
+        workspaceId: workspace.id,
+        actorId: userId,
+        type: "DOCUMENT_DELETED",
+        entityType: "DOCUMENT",
+        entityId: pageId,
+        metadata: {
+          documentTitle: page?.title || "Document",
+        },
+      });
     }
 
     return deleted;
@@ -174,3 +212,4 @@ export class PageService {
 }
 
 export const pageService = new PageService();
+

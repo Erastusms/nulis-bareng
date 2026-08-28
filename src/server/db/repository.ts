@@ -1,4 +1,4 @@
-import type { User, WorkspaceRole } from "@/types/domain";
+import type { ActivityType, User, WorkspaceRole } from "@/types/domain";
 
 /**
  * Internal persistence representation of User containing the password hash.
@@ -357,4 +357,55 @@ export interface IPageRepository {
   delete(id: string): Promise<boolean>;
   countByWorkspaceId(workspaceId: string): Promise<number>;
 }
+
+// Activity Records & DTOs
+
+export interface ActivityRecord {
+  id: string;
+  workspaceId: string;
+  actorId: string;
+  type: ActivityType;
+  entityType: string | null;
+  entityId: string | null;
+  metadata: Record<string, unknown> | null;
+  createdAt: Date;
+  actor?: {
+    id: string;
+    name: string;
+    email?: string;
+    avatarUrl?: string | null;
+  };
+}
+
+export interface CreateActivityData {
+  workspaceId: string;
+  actorId: string;
+  type: ActivityType;
+  entityType?: string | null;
+  entityId?: string | null;
+  metadata?: Record<string, unknown> | null;
+  createdAt?: Date;
+}
+
+export interface ActivityPaginationOptions {
+  limit?: number;
+  cursor?: string;
+}
+
+export interface PaginatedActivitiesResult {
+  items: ActivityRecord[];
+  nextCursor: string | null;
+}
+
+export interface IActivityRepository {
+  findById(id: string): Promise<ActivityRecord | null>;
+  findByWorkspaceId(
+    workspaceId: string,
+    options?: ActivityPaginationOptions
+  ): Promise<PaginatedActivitiesResult>;
+  create(data: CreateActivityData): Promise<ActivityRecord>;
+  delete(id: string): Promise<boolean>;
+  countByWorkspaceId(workspaceId: string): Promise<number>;
+}
+
 

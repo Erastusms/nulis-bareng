@@ -6,8 +6,10 @@ import type {
   ICardRepository,
 } from "@/server/db/repository";
 import { eventPublisher, IEventPublisher } from "@/server/websocket/event-publisher";
+import { activityService as defaultActivityService, ActivityService } from "../activities/activity.service";
 import { boardAuth, BoardAuthorizationService } from "./board-authorization";
 import type { Card } from "@/types/domain";
+
 
 export interface CreateCardDTO {
   columnId: string;
@@ -57,7 +59,8 @@ export class CardService {
   constructor(
     private readonly cardRepo: ICardRepository = cardRepository,
     private readonly authService: BoardAuthorizationService = boardAuth,
-    private readonly publisher: IEventPublisher = eventPublisher
+    private readonly publisher: IEventPublisher = eventPublisher,
+    private readonly activityService: ActivityService = defaultActivityService
   ) {}
 
   /**
@@ -137,6 +140,19 @@ export class CardService {
       timestamp: new Date().toISOString(),
     });
 
+    await this.activityService.recordActivity({
+      workspaceId: canonicalWorkspaceId,
+      actorId: userId,
+      type: "CARD_CREATED",
+      entityType: "CARD",
+      entityId: domainCard.id,
+      metadata: {
+        cardTitle: domainCard.title,
+        columnId: domainCard.columnId,
+        boardId,
+      },
+    });
+
     return domainCard;
   }
 
@@ -152,6 +168,7 @@ export class CardService {
   ): Promise<Card> {
     const authResult = await this.authService.requireCardInBoard(cardId, boardId, workspaceId, userId);
     const canonicalWorkspaceId = authResult?.workspace?.id ?? workspaceId;
+    const existingCard = authResult.card;
 
     if (dto.columnId) {
       await this.authService.requireColumnInBoard(
@@ -211,6 +228,21 @@ export class CardService {
       timestamp: new Date().toISOString(),
     });
 
+    if (dto.title && existingCard && existingCard.title !== domainCard.title) {
+      await this.activityService.recordActivity({
+        workspaceId: canonicalWorkspaceId,
+        actorId: userId,
+        type: "CARD_RENAMED",
+        entityType: "CARD",
+        entityId: domainCard.id,
+        metadata: {
+          cardTitle: domainCard.title,
+          previousTitle: existingCard.title,
+          boardId,
+        },
+      });
+    }
+
     return domainCard;
   }
 
@@ -238,6 +270,18 @@ export class CardService {
         cardId,
         version: createVersion(),
         timestamp: new Date().toISOString(),
+      });
+
+      await this.activityService.recordActivity({
+        workspaceId: canonicalWorkspaceId,
+        actorId: userId,
+        type: "CARD_DELETED",
+        entityType: "CARD",
+        entityId: cardId,
+        metadata: {
+          cardTitle: card?.title || "Card",
+          boardId,
+        },
       });
     }
 
@@ -305,8 +349,24 @@ export class CardService {
       timestamp: new Date().toISOString(),
     });
 
+    await this.activityService.recordActivity({
+      workspaceId: canonicalWorkspaceId,
+      actorId: userId,
+      type: "CARD_MOVED",
+      entityType: "CARD",
+      entityId: domainCard.id,
+      metadata: {
+        cardTitle: domainCard.title,
+        boardId,
+        fromColumnId: dto.sourceColumnId,
+        toColumnId: dto.targetColumnId,
+        position: domainCard.position,
+      },
+    });
+
     return domainCard;
   }
 }
+
 
 export const cardService = new CardService();

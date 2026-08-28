@@ -543,12 +543,16 @@ describe("Horizontal Scaling Multi-Instance Redis Pub/Sub E2E", () => {
     // Wait for event dissemination through Redis
     await new Promise((r) => setTimeout(r, 100));
 
-    // 5. Verification: Both Client A (API #1) and Client B (API #2) received exactly ONE event
-    expect(clientAEvents).toHaveLength(1);
-    expect(clientAEvents[0].type).toBe("card.created");
+    // 5. Verification: Both Client A (API #1) and Client B (API #2) received card.created event
+    const cardCreatedA = clientAEvents.filter((e) => e.type === "card.created");
+    const cardCreatedB = clientBEvents.filter((e) => e.type === "card.created");
 
-    expect(clientBEvents).toHaveLength(1);
-    expect(clientBEvents[0].type).toBe("card.created");
+    expect(cardCreatedA).toHaveLength(1);
+    expect(cardCreatedA[0].type).toBe("card.created");
+
+    expect(cardCreatedB).toHaveLength(1);
+    expect(cardCreatedB[0].type).toBe("card.created");
+
 
     // 6. Cache state on both clients is identical
     const boardA = queryClientA.getQueryData<Board>(boardKeys.detail(mockBoardRecord.id));
@@ -656,10 +660,11 @@ describe("Horizontal Scaling Multi-Instance Redis Pub/Sub E2E", () => {
     const clientCEvents: RealtimeDomainEvent[] = [];
     wsC.on("message", (data) => {
       const msg = JSON.parse(data.toString());
-      if (msg.type && msg.type.includes(".")) {
+      if (msg.type && msg.type.includes(".") && msg.type !== "presence.state") {
         clientCEvents.push(msg);
       }
     });
+
 
     // Trigger board update in Shared Workspace on API #1
     vi.spyOn(boardRepository, "findById").mockResolvedValue(mockBoardRecord as any);

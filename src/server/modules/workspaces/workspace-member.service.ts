@@ -19,6 +19,7 @@ import type {
   WorkspaceMemberWithUserRecord,
 } from "@/server/db/repository";
 import { eventPublisher, IEventPublisher } from "@/server/websocket/event-publisher";
+import { activityService as defaultActivityService, ActivityService } from "../activities/activity.service";
 import {
   evaluateMemberRemoval,
   normalizeRole,
@@ -83,8 +84,10 @@ export class WorkspaceMemberService {
     private readonly invitationRepo: IWorkspaceInvitationRepository = workspaceInvitationRepository,
     private readonly authService: WorkspaceAuthorizationService = workspaceAuth,
     private readonly mailer: EmailService = emailService,
-    private readonly publisher: IEventPublisher = eventPublisher
+    private readonly publisher: IEventPublisher = eventPublisher,
+    private readonly activityService: ActivityService = defaultActivityService
   ) {}
+
 
   /**
    * Retrieves all members of a workspace. Supports workspace ID or URL identifier.
@@ -302,6 +305,19 @@ export class WorkspaceMemberService {
       });
     }
 
+    await this.activityService.recordActivity({
+      workspaceId: invitation.workspaceId,
+      actorId: userId,
+      type: "MEMBER_JOINED",
+      entityType: "MEMBER",
+      entityId: addedMember ? addedMember.id : userId,
+      metadata: {
+        memberName: addedMember?.user?.name || user.name,
+        memberEmail: user.email,
+        role: invitation.role,
+      },
+    });
+
     return {
       workspaceId: invitation.workspaceId,
     };
@@ -360,10 +376,23 @@ export class WorkspaceMemberService {
         version: createVersion(),
         timestamp: new Date().toISOString(),
       });
+
+      await this.activityService.recordActivity({
+        workspaceId: workspace.id,
+        actorId: removerId,
+        type: "MEMBER_LEFT",
+        entityType: "MEMBER",
+        entityId: targetMember.id,
+        metadata: {
+          targetUserId,
+          isSelf,
+        },
+      });
     }
 
     return deleted;
   }
 }
+
 
 export const workspaceMemberService = new WorkspaceMemberService();

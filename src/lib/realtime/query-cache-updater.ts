@@ -1,6 +1,16 @@
 import type { QueryClient } from "@tanstack/react-query";
-import { boardKeys, documentKeys, workspaceKeys } from "@/lib/query/query-keys";
-import type { Board, BoardColumn, Card, Page, PageSummary, WorkspaceMember } from "@/types/domain";
+import { activityKeys, boardKeys, documentKeys, presenceKeys, workspaceKeys } from "@/lib/query/query-keys";
+import type {
+  Activity,
+  Board,
+  BoardColumn,
+  Card,
+  Page,
+  PageSummary,
+  PaginatedActivities,
+  UserPresence,
+  WorkspaceMember,
+} from "@/types/domain";
 import type { RealtimeDomainEvent } from "./events";
 
 
@@ -85,6 +95,12 @@ export class RealtimeCacheUpdater {
       case "page.deleted":
         this.handlePageDeleted(queryClient, event);
         break;
+      case "activity.created":
+        this.handleActivityCreated(queryClient, event);
+        break;
+      case "presence.updated":
+        this.handlePresenceUpdated(queryClient, event);
+        break;
     }
 
     return true;
@@ -110,8 +126,13 @@ export class RealtimeCacheUpdater {
       case "page.updated":
       case "page.deleted":
         return `page:${event.pageId}`;
+      case "activity.created":
+        return `activity:${event.activity.id}`;
+      case "presence.updated":
+        return `presence:${event.userId}`;
     }
   }
+
 
   private handleCardCreated(
     queryClient: QueryClient,
@@ -416,7 +437,124 @@ export class RealtimeCacheUpdater {
     // 2. Invalidate or remove detail cache
     queryClient.removeQueries({ queryKey: documentKeys.detail(event.pageId) });
   }
+
+  private handleActivityCreated(
+    queryClient: QueryClient,
+    event: Extract<RealtimeDomainEvent, { type: "activity.created" }>
+  ): void {
+    // Prepend activity to infinite query or list cache for this workspace
+    queryClient.setQueriesData<any>(
+      { queryKey: activityKeys.lists() },
+      (oldData: any) => {
+        if (!oldData) return oldData;
+
+
+        // Support InfiniteData structure { pages: PaginatedActivities[], pageParams: ... }
+        if (oldData.pages && Array.isArray(oldData.pages)) {
+          const firstPage = oldData.pages[0];
+          if (!firstPage) return oldData;
+          if (firstPage.items?.some((a: Activity) => a.id === event.activity.id)) {
+            return oldData;
+          }
+          const updatedFirstPage = {
+            ...firstPage,
+            items: [event.activity, ...(firstPage.items || [])],
+          };
+          return {
+            ...oldData,
+            pages: [updatedFirstPage, ...oldData.pages.slice(1)],
+          };
+        }
+
+        // Support direct PaginatedActivities structure { items: Activity[], nextCursor: ... }
+        if (oldData.items && Array.isArray(oldData.items)) {
+          if (oldData.items.some((a: Activity) => a.id === event.activity.id)) {
+            return oldData;
+          }
+          return {
+            ...oldData,
+            items: [event.activity, ...oldData.items],
+          };
+        }
+
+        return oldData;
+      }
+    );
+  }
+
+  private handlePresenceUpdated(
+    queryClient: QueryClient,
+    event: Extract<RealtimeDomainEvent, { type: "presence.updated" }>
+  ): void {
+    // 1. Update workspace presence list
+    queryClient.setQueriesData<UserPresence[]>(
+      { queryKey: presenceKeys.workspace(event.workspaceId) },
+      (oldPresences) => {
+        if (!oldPresences || !Array.isArray(oldPresences)) {
+          return [
+            {
+              userId: event.userId,
+              status: event.status,
+              lastSeenAt: event.lastSeenAt,
+            },
+          ];
+        }
+
+        const exists = oldPresences.some((p) => p.userId === event.userId);
+        if (!exists) {
+          return [
+            ...oldPresences,
+            {
+              userId: event.userId,
+              status: event.status,
+              lastSeenAt: event.lastSeenAt,
+            },
+          ];
+        }
+
+        return oldPresences.map((p) =>
+          p.userId === event.userId
+            ? {
+                ...p,
+                status: event.status,
+                lastSeenAt: event.lastSeenAt,
+              }
+            : p
+        );
+      }
+    );
+
+    // 2. Update individual user presence cache
+    queryClient.setQueryData<UserPresence>(
+      presenceKeys.user(event.userId),
+      (oldPresence) => ({
+        userId: event.userId,
+        status: event.status,
+        lastSeenAt: event.lastSeenAt,
+        ...(oldPresence && { ...oldPresence, status: event.status, lastSeenAt: event.lastSeenAt }),
+      })
+    );
+  }
+
+  /**
+   * Sets initial batch presence state received from server.
+   */
+  setWorkspacePresenceState(
+    queryClient: QueryClient,
+    workspaceId: string,
+    presenceList: UserPresence[]
+  ): void {
+    queryClient.setQueryData<UserPresence[]>(
+      presenceKeys.workspace(workspaceId),
+      presenceList
+    );
+
+    for (const p of presenceList) {
+      queryClient.setQueryData<UserPresence>(presenceKeys.user(p.userId), p);
+    }
+  }
 }
 
 export const realtimeCacheUpdater = new RealtimeCacheUpdater();
+
 

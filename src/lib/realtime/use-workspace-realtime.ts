@@ -30,6 +30,13 @@ export function useWorkspaceRealtime(workspaceId: string | undefined | null) {
       realtimeCacheUpdater.applyEvent(queryClient, event);
     });
 
+    // Listen for initial batch presence state
+    const unsubscribePresenceState = client.onPresenceState((msg) => {
+      if (msg.workspaceId === workspaceId) {
+        realtimeCacheUpdater.setWorkspacePresenceState(queryClient, workspaceId, msg.presence);
+      }
+    });
+
     // Listen for connection status changes
     const unsubscribeStatus = client.onStatusChange((newStatus) => {
       setStatus(newStatus);
@@ -37,9 +44,11 @@ export function useWorkspaceRealtime(workspaceId: string | undefined | null) {
 
     return () => {
       unsubscribeEvents();
+      unsubscribePresenceState();
       unsubscribeStatus();
       client.unsubscribe(workspaceId);
     };
+
   }, [workspaceId, queryClient]);
 
   return { status };

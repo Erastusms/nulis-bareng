@@ -1,6 +1,7 @@
 import type {
   ClientMessage,
   ErrorMessage,
+  PresenceStateMessage,
   RealtimeDomainEvent,
   RealtimeServerMessage,
 } from "./events";
@@ -10,6 +11,7 @@ export type ConnectionStatus = "disconnected" | "connecting" | "connected" | "re
 export type EventListener = (event: RealtimeDomainEvent) => void;
 export type StatusListener = (status: ConnectionStatus) => void;
 export type ErrorListener = (error: ErrorMessage) => void;
+export type PresenceStateListener = (message: PresenceStateMessage) => void;
 
 export interface RealtimeClientOptions {
   url?: string;
@@ -38,6 +40,7 @@ export class RealtimeClient {
   private eventListeners = new Set<EventListener>();
   private statusListeners = new Set<StatusListener>();
   private errorListeners = new Set<ErrorListener>();
+  private presenceStateListeners = new Set<PresenceStateListener>();
 
   private isExplicitlyClosed = false;
 
@@ -50,12 +53,13 @@ export class RealtimeClient {
     this.maxReconnectAttempts = options.maxReconnectAttempts ?? 10;
     this.initialReconnectDelayMs = options.initialReconnectDelayMs ?? 1000;
     this.maxReconnectDelayMs = options.maxReconnectDelayMs ?? 10000;
-    this.heartbeatIntervalMs = options.heartbeatIntervalMs ?? 30000;
+    this.heartbeatIntervalMs = options.heartbeatIntervalMs ?? 10000;
 
     if (options.autoConnect && typeof window !== "undefined") {
       this.connect();
     }
   }
+
 
   /**
    * Current connection lifecycle status.
@@ -188,6 +192,27 @@ export class RealtimeClient {
     }
   }
 
+  /**
+   * Updates user's presence state across active connections.
+   */
+  setPresence(status: "ONLINE" | "AWAY"): void {
+    this.sendMessage({ type: "presence.update", status });
+  }
+
+  private startHeartbeat(): void {
+    this.stopHeartbeat();
+    this.heartbeatTimer = setInterval(() => {
+      this.sendMessage({ type: "heartbeat" });
+    }, this.heartbeatIntervalMs);
+  }
+
+  private stopHeartbeat(): void {
+    if (this.heartbeatTimer) {
+      clearInterval(this.heartbeatTimer);
+      this.heartbeatTimer = null;
+    }
+  }
+
   private handleIncomingMessage(rawData: string | ArrayBuffer | Blob): void {
     try {
       const text = typeof rawData === "string" ? rawData : rawData.toString();
@@ -198,6 +223,17 @@ export class RealtimeClient {
       }
 
       if (message.type === "pong" || message.type === "subscribed" || message.type === "unsubscribed") {
+        return;
+      }
+
+      if (message.type === "presence.state") {
+        for (const listener of this.presenceStateListeners) {
+          try {
+            listener(message);
+          } catch (err) {
+            console.error("[RealtimeClient] Error in presence state listener:", err);
+          }
+        }
         return;
       }
 
@@ -248,20 +284,6 @@ export class RealtimeClient {
     }, delay);
   }
 
-  private startHeartbeat(): void {
-    this.stopHeartbeat();
-    this.heartbeatTimer = setInterval(() => {
-      this.sendMessage({ type: "ping" });
-    }, this.heartbeatIntervalMs);
-  }
-
-  private stopHeartbeat(): void {
-    if (this.heartbeatTimer) {
-      clearInterval(this.heartbeatTimer);
-      this.heartbeatTimer = null;
-    }
-  }
-
   // -------------------------------------------------------------------------
   // Event Subscriptions
   // -------------------------------------------------------------------------
@@ -269,6 +291,11 @@ export class RealtimeClient {
   onEvent(listener: EventListener): () => void {
     this.eventListeners.add(listener);
     return () => this.eventListeners.delete(listener);
+  }
+
+  onPresenceState(listener: PresenceStateListener): () => void {
+    this.presenceStateListeners.add(listener);
+    return () => this.presenceStateListeners.delete(listener);
   }
 
   onStatusChange(listener: StatusListener): () => void {
@@ -290,3 +317,4 @@ export function getRealtimeClient(): RealtimeClient {
   }
   return globalClient;
 }
+

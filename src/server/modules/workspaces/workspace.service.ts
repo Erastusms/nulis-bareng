@@ -7,11 +7,13 @@ import type {
   IWorkspaceRepository,
   WorkspaceRecord,
 } from "@/server/db/repository";
+import { activityService as defaultActivityService, ActivityService } from "../activities/activity.service";
 import {
   workspaceAuth,
   WorkspaceAuthorizationService,
 } from "./workspace-authorization";
 import type { Workspace, WorkspaceRole } from "@/types/domain";
+
 
 export interface CreateWorkspaceDTO {
   name: string;
@@ -49,7 +51,8 @@ export class WorkspaceService {
   constructor(
     private readonly workspaceRepo: IWorkspaceRepository = workspaceRepository,
     private readonly authService: WorkspaceAuthorizationService = workspaceAuth,
-    private readonly userRepo: IUserRepository = userRepository
+    private readonly userRepo: IUserRepository = userRepository,
+    private readonly activityService: ActivityService = defaultActivityService
   ) {}
 
   /**
@@ -120,6 +123,18 @@ export class WorkspaceService {
       ownerId: dto.ownerId,
     });
 
+    await this.activityService.recordActivity({
+      workspaceId: created.id,
+      actorId: dto.ownerId,
+      type: "WORKSPACE_CREATED",
+      entityType: "WORKSPACE",
+      entityId: created.id,
+      metadata: {
+        workspaceName: created.name,
+        slug: created.slug,
+      },
+    });
+
     return toDomainWorkspace(created, "OWNER");
   }
 
@@ -185,8 +200,23 @@ export class WorkspaceService {
       description: dto.description !== undefined ? dto.description?.trim() ?? null : undefined,
     });
 
+    if (dto.name && dto.name !== existingWorkspace.name) {
+      await this.activityService.recordActivity({
+        workspaceId: existingWorkspace.id,
+        actorId: userId,
+        type: "WORKSPACE_RENAMED",
+        entityType: "WORKSPACE",
+        entityId: existingWorkspace.id,
+        metadata: {
+          workspaceName: updated.name,
+          previousName: existingWorkspace.name,
+        },
+      });
+    }
+
     return toDomainWorkspace(updated, authContext.role);
   }
+
 
   /**
    * Deletes a workspace. Requires OWNER role.

@@ -8,11 +8,14 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useCurrentUser } from "@/features/auth/hooks/use-auth";
+import { PresenceIndicator } from "@/features/presence/components/PresenceIndicator";
+import { useWorkspacePresence } from "@/features/presence/hooks/use-presence";
 import { useWorkspace } from "../hooks/use-workspaces";
 import { useWorkspaceMembers } from "../hooks/use-workspace-members";
 import { InviteMemberModal } from "./InviteMemberModal";
 import { RemoveMemberDialog } from "./RemoveMemberDialog";
 import type { WorkspaceMember, WorkspaceRole } from "@/types/domain";
+
 
 function getRoleBadgeVariant(role?: WorkspaceRole) {
   const norm = role?.toUpperCase();
@@ -29,6 +32,17 @@ export function MemberList({ workspaceId }: MemberListProps) {
   const { data: currentUser } = useCurrentUser();
   const { data: workspace } = useWorkspace(workspaceId);
   const { data: members, isLoading, error } = useWorkspaceMembers(workspaceId);
+  const { data: presenceList } = useWorkspacePresence(workspaceId);
+
+  const presenceMap = React.useMemo(() => {
+    const map = new Map<string, "ONLINE" | "AWAY" | "OFFLINE">();
+    if (presenceList) {
+      for (const p of presenceList) {
+        map.set(p.userId, p.status);
+      }
+    }
+    return map;
+  }, [presenceList]);
 
   const [isInviteOpen, setIsInviteOpen] = React.useState(false);
   const [memberToRemove, setMemberToRemove] = React.useState<WorkspaceMember | null>(null);
@@ -47,6 +61,7 @@ export function MemberList({ workspaceId }: MemberListProps) {
     if (currentUserRole === "ADMIN" && targetNormRole === "MEMBER") return true;
     return false;
   };
+
 
   return (
     <div className="space-y-6">
@@ -130,26 +145,33 @@ export function MemberList({ workspaceId }: MemberListProps) {
                     })
                   : null;
 
+                const memberPresence = presenceMap.get(member.userId) || "OFFLINE";
+
                 return (
                   <div
                     key={member.id}
                     className="flex flex-col gap-3 py-3.5 sm:flex-row sm:items-center sm:justify-between"
                   >
                     <div className="flex items-center space-x-3">
-                      {member.user?.avatarUrl ? (
-                        <Image
-                          src={member.user.avatarUrl}
-                          alt={member.user?.name || "Member Avatar"}
-                          width={40}
-                          height={40}
-                          unoptimized
-                          className="h-10 w-10 rounded-full object-cover border border-border"
-                        />
-                      ) : (
-                        <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10 text-sm font-semibold text-primary border border-primary/20">
-                          {initials}
+                      <div className="relative">
+                        {member.user?.avatarUrl ? (
+                          <Image
+                            src={member.user.avatarUrl}
+                            alt={member.user?.name || "Member Avatar"}
+                            width={40}
+                            height={40}
+                            unoptimized
+                            className="h-10 w-10 rounded-full object-cover border border-border"
+                          />
+                        ) : (
+                          <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10 text-sm font-semibold text-primary border border-primary/20">
+                            {initials}
+                          </div>
+                        )}
+                        <div className="absolute -bottom-0.5 -right-0.5 rounded-full bg-background p-0.5 shadow-xs">
+                          <PresenceIndicator status={memberPresence} size="sm" />
                         </div>
-                      )}
+                      </div>
                       <div>
                         <div className="flex items-center gap-2">
                           <span className="text-sm font-medium text-foreground">
@@ -168,6 +190,8 @@ export function MemberList({ workspaceId }: MemberListProps) {
                     </div>
 
                     <div className="flex items-center gap-3 self-end sm:self-auto">
+                      <PresenceIndicator status={memberPresence} showLabel size="sm" className="hidden sm:inline-flex" />
+
                       {joinedDate && (
                         <span className="hidden text-xs text-muted-foreground md:inline">
                           Joined {joinedDate}
@@ -180,6 +204,7 @@ export function MemberList({ workspaceId }: MemberListProps) {
                       >
                         {normRole}
                       </Badge>
+
 
                       {canRemoveTarget(member) && (
                         <Button

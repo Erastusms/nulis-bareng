@@ -54,3 +54,17 @@ export const authKeys = {
   session: () => [...authKeys.all, "session"] as const,
   user: () => userKeys.current(),
 };
+
+export const activityKeys = {
+  all: ["activities"] as const,
+  lists: () => [...activityKeys.all, "list"] as const,
+  list: (workspaceId: string, filters?: Record<string, unknown>) =>
+    [...activityKeys.lists(), workspaceId, filters] as const,
+};
+
+export const presenceKeys = {
+  all: ["presence"] as const,
+  workspace: (workspaceId: string) => [...presenceKeys.all, "workspace", workspaceId] as const,
+  user: (userId: string) => [...presenceKeys.all, "user", userId] as const,
+};
+

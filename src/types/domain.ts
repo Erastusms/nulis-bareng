@@ -153,3 +153,70 @@ export interface Notification {
   isRead: boolean;
   createdAt: Timestamp;
 }
+
+// ---------------------------------------------------------------------------
+// Presence Types
+// ---------------------------------------------------------------------------
+
+export type PresenceStatus = "ONLINE" | "AWAY" | "OFFLINE";
+
+export interface UserPresence {
+  userId: EntityId;
+  status: PresenceStatus;
+  lastSeenAt: Timestamp;
+}
+
+// ---------------------------------------------------------------------------
+// Activity Types
+// ---------------------------------------------------------------------------
+
+export type ActivityType =
+  | "WORKSPACE_CREATED"
+  | "WORKSPACE_RENAMED"
+  | "MEMBER_JOINED"
+  | "MEMBER_LEFT"
+  | "BOARD_CREATED"
+  | "BOARD_RENAMED"
+  | "BOARD_DELETED"
+  | "COLUMN_CREATED"
+  | "COLUMN_RENAMED"
+  | "COLUMN_DELETED"
+  | "COLUMN_MOVED"
+  | "CARD_CREATED"
+  | "CARD_RENAMED"
+  | "CARD_DELETED"
+  | "CARD_MOVED"
+  | "DOCUMENT_CREATED"
+  | "DOCUMENT_RENAMED"
+  | "DOCUMENT_DELETED";
+
+export interface ActivityActor {
+  id: EntityId;
+  name: string;
+  email?: string;
+  avatarUrl?: string | null;
+}
+
+export interface ActivityEntity {
+  type: string;
+  id?: EntityId | null;
+}
+
+export interface Activity {
+  id: EntityId;
+  workspaceId: EntityId;
+  actorId: EntityId;
+  actor?: ActivityActor;
+  type: ActivityType;
+  entityType?: string | null;
+  entityId?: EntityId | null;
+  entity?: ActivityEntity;
+  metadata?: Record<string, unknown> | null;
+  createdAt: Timestamp;
+}
+
+export interface PaginatedActivities {
+  items: Activity[];
+  nextCursor?: string | null;
+}
+

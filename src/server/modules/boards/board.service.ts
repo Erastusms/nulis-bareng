@@ -3,6 +3,7 @@ import { createEventId, createVersion } from "@/lib/realtime/events";
 import { boardRepository } from "@/server/db/repositories/board.repository";
 import type { BoardRecord, IBoardRepository } from "@/server/db/repository";
 import { eventPublisher, IEventPublisher } from "@/server/websocket/event-publisher";
+import { activityService as defaultActivityService, ActivityService } from "../activities/activity.service";
 import { boardAuth, BoardAuthorizationService } from "./board-authorization";
 import type { Board } from "@/types/domain";
 
@@ -56,7 +57,8 @@ export class BoardService {
   constructor(
     private readonly boardRepo: IBoardRepository = boardRepository,
     private readonly authService: BoardAuthorizationService = boardAuth,
-    private readonly publisher: IEventPublisher = eventPublisher
+    private readonly publisher: IEventPublisher = eventPublisher,
+    private readonly activityService: ActivityService = defaultActivityService
   ) {}
 
   /**
@@ -112,7 +114,20 @@ export class BoardService {
       description: dto.description?.trim() ?? null,
     });
 
-    return toDomainBoard(created);
+    const domainBoard = toDomainBoard(created);
+
+    await this.activityService.recordActivity({
+      workspaceId: workspace.id,
+      actorId: userId,
+      type: "BOARD_CREATED",
+      entityType: "BOARD",
+      entityId: domainBoard.id,
+      metadata: {
+        boardTitle: domainBoard.title,
+      },
+    });
+
+    return domainBoard;
   }
 
   /**
@@ -129,6 +144,8 @@ export class BoardService {
       workspaceIdOrIdentifier,
       userId
     );
+
+    const existingBoard = await this.boardRepo.findById(boardId);
 
     const updated = await this.boardRepo.update(boardId, {
       title: dto.title?.trim(),
@@ -152,6 +169,20 @@ export class BoardService {
       timestamp: new Date().toISOString(),
     });
 
+    if (dto.title && existingBoard && existingBoard.title !== domainBoard.title) {
+      await this.activityService.recordActivity({
+        workspaceId: workspace.id,
+        actorId: userId,
+        type: "BOARD_RENAMED",
+        entityType: "BOARD",
+        entityId: domainBoard.id,
+        metadata: {
+          boardTitle: domainBoard.title,
+          previousTitle: existingBoard.title,
+        },
+      });
+    }
+
     return domainBoard;
   }
 
@@ -163,13 +194,30 @@ export class BoardService {
     boardId: string,
     userId: string
   ): Promise<boolean> {
-    await this.authService.requireBoardInWorkspace(
+    const { workspace } = await this.authService.requireBoardInWorkspace(
       boardId,
       workspaceIdOrIdentifier,
       userId
     );
-    return this.boardRepo.delete(boardId);
+    const existingBoard = await this.boardRepo.findById(boardId);
+    const deleted = await this.boardRepo.delete(boardId);
+
+    if (deleted) {
+      await this.activityService.recordActivity({
+        workspaceId: workspace.id,
+        actorId: userId,
+        type: "BOARD_DELETED",
+        entityType: "BOARD",
+        entityId: boardId,
+        metadata: {
+          boardTitle: existingBoard?.title || "Board",
+        },
+      });
+    }
+
+    return deleted;
   }
 }
 
 export const boardService = new BoardService();
+

@@ -6,8 +6,10 @@ import type {
   IBoardColumnRepository,
 } from "@/server/db/repository";
 import { eventPublisher, IEventPublisher } from "@/server/websocket/event-publisher";
+import { activityService as defaultActivityService, ActivityService } from "../activities/activity.service";
 import { boardAuth, BoardAuthorizationService } from "./board-authorization";
 import type { BoardColumn } from "@/types/domain";
+
 
 export interface CreateColumnDTO {
   title: string;
@@ -58,7 +60,8 @@ export class BoardColumnService {
   constructor(
     private readonly columnRepo: IBoardColumnRepository = boardColumnRepository,
     private readonly authService: BoardAuthorizationService = boardAuth,
-    private readonly publisher: IEventPublisher = eventPublisher
+    private readonly publisher: IEventPublisher = eventPublisher,
+    private readonly activityService: ActivityService = defaultActivityService
   ) {}
 
   /**
@@ -101,6 +104,18 @@ export class BoardColumnService {
       timestamp: new Date().toISOString(),
     });
 
+    await this.activityService.recordActivity({
+      workspaceId: canonicalWorkspaceId,
+      actorId: userId,
+      type: "COLUMN_CREATED",
+      entityType: "COLUMN",
+      entityId: domainColumn.id,
+      metadata: {
+        columnTitle: domainColumn.title,
+        boardId,
+      },
+    });
+
     return domainColumn;
   }
 
@@ -116,6 +131,7 @@ export class BoardColumnService {
   ): Promise<BoardColumn> {
     const authResult = await this.authService.requireColumnInBoard(columnId, boardId, workspaceId, userId);
     const canonicalWorkspaceId = authResult?.workspace?.id ?? workspaceId;
+    const existingColumn = authResult.column;
 
     const updated = await this.columnRepo.update(columnId, {
       title: dto.title?.trim(),
@@ -140,6 +156,21 @@ export class BoardColumnService {
       timestamp: new Date().toISOString(),
     });
 
+    if (dto.title && existingColumn && existingColumn.title !== domainColumn.title) {
+      await this.activityService.recordActivity({
+        workspaceId: canonicalWorkspaceId,
+        actorId: userId,
+        type: "COLUMN_RENAMED",
+        entityType: "COLUMN",
+        entityId: domainColumn.id,
+        metadata: {
+          columnTitle: domainColumn.title,
+          previousTitle: existingColumn.title,
+          boardId,
+        },
+      });
+    }
+
     return domainColumn;
   }
 
@@ -154,6 +185,7 @@ export class BoardColumnService {
   ): Promise<boolean> {
     const authResult = await this.authService.requireColumnInBoard(columnId, boardId, workspaceId, userId);
     const canonicalWorkspaceId = authResult?.workspace?.id ?? workspaceId;
+    const column = authResult.column;
     const deleted = await this.columnRepo.delete(columnId);
 
     if (deleted) {
@@ -165,6 +197,18 @@ export class BoardColumnService {
         columnId,
         version: createVersion(),
         timestamp: new Date().toISOString(),
+      });
+
+      await this.activityService.recordActivity({
+        workspaceId: canonicalWorkspaceId,
+        actorId: userId,
+        type: "COLUMN_DELETED",
+        entityType: "COLUMN",
+        entityId: columnId,
+        metadata: {
+          columnTitle: column?.title || "Column",
+          boardId,
+        },
       });
     }
 
@@ -206,6 +250,19 @@ export class BoardColumnService {
       },
       version: createVersion(),
       timestamp: new Date().toISOString(),
+    });
+
+    await this.activityService.recordActivity({
+      workspaceId: canonicalWorkspaceId,
+      actorId: userId,
+      type: "COLUMN_MOVED",
+      entityType: "COLUMN",
+      entityId: domainColumn.id,
+      metadata: {
+        columnTitle: domainColumn.title,
+        boardId,
+        targetPosition: dto.targetPosition,
+      },
     });
 
     return domainColumn;
@@ -255,8 +312,21 @@ export class BoardColumnService {
       });
     }
 
+    await this.activityService.recordActivity({
+      workspaceId: canonicalWorkspaceId,
+      actorId: userId,
+      type: "COLUMN_MOVED",
+      entityType: "BOARD",
+      entityId: boardId,
+      metadata: {
+        boardId,
+        reorderedCount: columnIds.length,
+      },
+    });
+
     return domainColumns;
   }
 }
+
 
 export const boardColumnService = new BoardColumnService();
