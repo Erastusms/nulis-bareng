@@ -43,7 +43,11 @@ export function useCreateBoard(workspaceId: string) {
     onSuccess: (newBoard) => {
       queryClient.setQueryData(
         boardKeys.lists(workspaceId),
-        (old: Board[] | undefined) => (old ? [...old, newBoard] : [newBoard])
+        (old: Board[] | undefined) => {
+          if (!old) return [newBoard];
+          const filtered = old.filter((b) => b.id !== newBoard.id);
+          return [...filtered, newBoard];
+        }
       );
       queryClient.invalidateQueries({ queryKey: boardKeys.lists(workspaceId) });
     },

@@ -38,7 +38,11 @@ export function useCreateWorkspace() {
     onSuccess: (newWorkspace) => {
       queryClient.setQueryData(
         workspaceKeys.lists(),
-        (old: Workspace[] | undefined) => (old ? [newWorkspace, ...old] : [newWorkspace])
+        (old: Workspace[] | undefined) => {
+          if (!old) return [newWorkspace];
+          const filtered = old.filter((w) => w.id !== newWorkspace.id);
+          return [newWorkspace, ...filtered];
+        }
       );
       queryClient.invalidateQueries({ queryKey: workspaceKeys.lists() });
     },

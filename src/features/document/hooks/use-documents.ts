@@ -55,7 +55,10 @@ export function useCreatePage(workspaceId: string) {
 
       queryClient.setQueryData<PageSummary[]>(
         documentKeys.lists(workspaceId),
-        (old = []) => [summary, ...old]
+        (old = []) => {
+          const filtered = old.filter((p) => p.id !== newPage.id);
+          return [summary, ...filtered];
+        }
       );
       queryClient.setQueryData<Page>(documentKeys.detail(newPage.id), newPage);
     },

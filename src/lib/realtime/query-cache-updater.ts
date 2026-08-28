@@ -370,10 +370,8 @@ export class RealtimeCacheUpdater {
       { queryKey: documentKeys.allLists() },
       (oldPages) => {
         if (!oldPages || !Array.isArray(oldPages)) return [event.page];
-        if (oldPages.some((p) => p.id === event.pageId)) {
-          return oldPages.map((p) => (p.id === event.pageId ? event.page : p));
-        }
-        return [event.page, ...oldPages];
+        const filtered = oldPages.filter((p) => p.id !== event.pageId);
+        return [event.page, ...filtered];
       }
     );
 

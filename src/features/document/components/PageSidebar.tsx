@@ -32,10 +32,19 @@ export function PageSidebar({ workspaceId, activePageId }: PageSidebarProps) {
   const [pageToDelete, setPageToDelete] = React.useState<{ id: string; title: string } | null>(null);
 
   const filteredPages = React.useMemo(() => {
-    if (!pages) return [];
-    if (!searchQuery.trim()) return pages;
+    if (!pages || !Array.isArray(pages)) return [];
+    // Deduplicate by page ID to guarantee unique React keys across concurrent updates
+    const seen = new Set<string>();
+    const uniquePages: typeof pages = [];
+    for (const p of pages) {
+      if (p && p.id && !seen.has(p.id)) {
+        seen.add(p.id);
+        uniquePages.push(p);
+      }
+    }
+    if (!searchQuery.trim()) return uniquePages;
     const query = searchQuery.toLowerCase();
-    return pages.filter((p) => p.title.toLowerCase().includes(query));
+    return uniquePages.filter((p) => p.title.toLowerCase().includes(query));
   }, [pages, searchQuery]);
 
   const handleCreatePage = async () => {
@@ -69,7 +78,7 @@ export function PageSidebar({ workspaceId, activePageId }: PageSidebarProps) {
           <span className="text-sm font-semibold tracking-tight">Documents</span>
           {pages && (
             <span className="rounded-full bg-muted px-2 py-0.5 font-mono text-[10px] text-muted-foreground">
-              {pages.length}
+              {filteredPages.length}
             </span>
           )}
         </div>
