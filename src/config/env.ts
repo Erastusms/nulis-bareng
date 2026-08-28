@@ -20,6 +20,12 @@ export const serverEnvSchema = z.object({
     .transform((val) => val === "true")
     .default("false"),
   WS_PORT: z.coerce.number().default(3001),
+  REDIS_URL: z.string().optional().default("redis://localhost:6379"),
+  ENABLE_REDIS: z
+    .string()
+    .transform((val) => val === "true")
+    .default("true"),
+  INSTANCE_ID: z.string().optional(),
 });
 
 /**
@@ -80,6 +86,8 @@ export function validateEnv(isServerOverride?: boolean): ClientEnv & ServerEnv {
       SMTP_PASSWORD: process.env.SMTP_PASSWORD,
       SMTP_SECURE: process.env.SMTP_SECURE,
       WS_PORT: process.env.WS_PORT,
+      REDIS_URL: process.env.REDIS_URL || "redis://localhost:6379",
+      INSTANCE_ID: process.env.INSTANCE_ID,
     });
 
     if (!serverParsed.success) {
@@ -110,6 +118,9 @@ export function validateEnv(isServerOverride?: boolean): ClientEnv & ServerEnv {
     SMTP_PASSWORD: undefined,
     SMTP_SECURE: false,
     WS_PORT: 3001,
+    REDIS_URL: "redis://localhost:6379",
+    ENABLE_REDIS: true,
+    INSTANCE_ID: undefined,
   };
 }
 

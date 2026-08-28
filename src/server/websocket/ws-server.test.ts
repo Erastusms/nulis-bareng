@@ -237,4 +237,11 @@ describe("WebSocketServer E2E / Integration", () => {
 
     client.close();
   });
+
+  it("should handle EADDRINUSE gracefully if port is already bound", async () => {
+    const { initWebSocketServer } = await import("./standalone-init");
+    // Attempt to start a second server on the already-listening test port
+    const duplicateServer = initWebSocketServer(port);
+    expect(duplicateServer).toBeDefined();
+  });
 });

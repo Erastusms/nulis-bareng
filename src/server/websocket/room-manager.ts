@@ -1,13 +1,37 @@
-import type { WebSocket } from "ws";
+import { WebSocket } from "ws";
+import type { RealtimeDomainEvent } from "@/lib/realtime/events";
 import type { ConnectionManager } from "./connection-manager";
 import { connectionManager as defaultConnManager } from "./connection-manager";
 import { wsLogger } from "./logger";
 
+export interface RoomSubscriptionHooks {
+  onFirstSubscriber?: (workspaceId: string) => void | Promise<void>;
+  onLastSubscriberLeft?: (workspaceId: string) => void | Promise<void>;
+}
+
 export class RoomManager {
   private rooms = new Map<string, Set<WebSocket>>();
+  private hooks: RoomSubscriptionHooks = {};
+
+  constructor(hooks?: RoomSubscriptionHooks) {
+    if (hooks) {
+      this.hooks = hooks;
+    }
+  }
+
+  /**
+   * Sets lifecycle hooks for workspace subscriptions.
+   */
+  setHooks(hooks: RoomSubscriptionHooks): void {
+    this.hooks = { ...this.hooks, ...hooks };
+  }
 
   private getRoomKey(workspaceId: string): string {
     return `workspace:${workspaceId}`;
+  }
+
+  private getWorkspaceIdFromKey(roomKey: string): string {
+    return roomKey.startsWith("workspace:") ? roomKey.slice(10) : roomKey;
   }
 
   /**
@@ -20,6 +44,7 @@ export class RoomManager {
   ): boolean {
     const roomKey = this.getRoomKey(workspaceId);
     let room = this.rooms.get(roomKey);
+    const isFirstSubscriber = !room || room.size === 0;
 
     if (!room) {
       room = new Set<WebSocket>();
@@ -43,6 +68,15 @@ export class RoomManager {
       });
     }
 
+    // Trigger dynamic subscription hook when the first client joins
+    if (isFirstSubscriber && this.hooks.onFirstSubscriber) {
+      try {
+        this.hooks.onFirstSubscriber(workspaceId);
+      } catch (err) {
+        wsLogger.error("Error in onFirstSubscriber hook", err, { workspaceId });
+      }
+    }
+
     return true;
   }
 
@@ -62,7 +96,9 @@ export class RoomManager {
     }
 
     room.delete(socket);
-    if (room.size === 0) {
+    const isLastSubscriber = room.size === 0;
+
+    if (isLastSubscriber) {
       this.rooms.delete(roomKey);
     }
 
@@ -75,6 +111,15 @@ export class RoomManager {
         workspaceId,
         remainingSubscribers: room.size,
       });
+    }
+
+    // Trigger dynamic unsubscription hook when the last client leaves
+    if (isLastSubscriber && this.hooks.onLastSubscriberLeft) {
+      try {
+        this.hooks.onLastSubscriberLeft(workspaceId);
+      } catch (err) {
+        wsLogger.error("Error in onLastSubscriberLeft hook", err, { workspaceId });
+      }
     }
 
     return true;
@@ -96,10 +141,8 @@ export class RoomManager {
       // Fallback sweep through all rooms
       for (const [roomKey, room] of this.rooms.entries()) {
         if (room.has(socket)) {
-          room.delete(socket);
-          if (room.size === 0) {
-            this.rooms.delete(roomKey);
-          }
+          const workspaceId = this.getWorkspaceIdFromKey(roomKey);
+          this.unsubscribe(workspaceId, socket, connManager);
         }
       }
     }
@@ -113,6 +156,49 @@ export class RoomManager {
     const room = this.rooms.get(roomKey);
     if (!room) return [];
     return Array.from(room);
+  }
+
+  /**
+   * Broadcasts a real-time domain event to all open local WebSockets in a workspace room.
+   * Returns the count of successfully sent messages.
+   */
+  broadcastToRoom(workspaceId: string, event: RealtimeDomainEvent): number {
+    const sockets = this.getSocketsInRoom(workspaceId);
+    const payload = JSON.stringify(event);
+    let sentCount = 0;
+
+    for (const socket of sockets) {
+      if (socket.readyState === WebSocket.OPEN) {
+        try {
+          socket.send(payload);
+          sentCount++;
+        } catch (err) {
+          wsLogger.error("Failed to send message to client socket", err, {
+            type: event.type,
+            workspaceId,
+            eventId: event.eventId,
+          });
+        }
+      }
+    }
+
+    if (sentCount > 0) {
+      wsLogger.info("Event broadcast to local sockets", {
+        type: event.type,
+        workspaceId,
+        eventId: event.eventId,
+        recipients: sentCount,
+      });
+    }
+
+    return sentCount;
+  }
+
+  /**
+   * Returns all currently active workspace IDs with connected local clients.
+   */
+  getActiveWorkspaceIds(): string[] {
+    return Array.from(this.rooms.keys()).map((k) => this.getWorkspaceIdFromKey(k));
   }
 
   /**

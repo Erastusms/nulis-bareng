@@ -1,9 +1,12 @@
 import http from "http";
-import { createWebSocketServer } from "./ws-server";
+import type { WebSocketServer } from "ws";
+import { createWebSocketServer, closeWebSocketServer } from "./ws-server";
 import { eventPublisher } from "./event-publisher";
+import { redisSubscriber, closeRedisClients } from "../redis";
 import { wsLogger } from "./logger";
 
 let serverInstance: http.Server | null = null;
+let wssInstance: WebSocketServer | null = null;
 
 /**
  * Initializes the standalone WebSocket server with healthcheck and internal publish bridge endpoints.
@@ -49,13 +52,20 @@ export function initWebSocketServer(
     server.on("error", (err: unknown) => {
       const errorWithCode = err as { code?: string };
       if (errorWithCode.code === "EADDRINUSE") {
-        wsLogger.info(`WebSocket server already running on port ${port}`);
+        wsLogger.info(`WebSocket server already running on port ${port}, reusing existing instance.`);
+        if (wssInstance) {
+          try {
+            wssInstance.close();
+          } catch {}
+          wssInstance = null;
+        }
+        serverInstance = null;
       } else {
         wsLogger.error("WebSocket server error", err);
       }
     });
 
-    createWebSocketServer({ server });
+    wssInstance = createWebSocketServer({ server, subscriber: redisSubscriber });
 
     server.listen(port, () => {
       wsLogger.info(`WebSocket server listening on port ${port} (ws://localhost:${port})`);
@@ -69,4 +79,33 @@ export function initWebSocketServer(
     });
     return null;
   }
+}
+
+/**
+ * Gracefully shuts down the running WebSocket server and Redis connections.
+ */
+export async function stopWebSocketServer(): Promise<void> {
+  if (wssInstance) {
+    try {
+      await closeWebSocketServer(wssInstance, redisSubscriber);
+    } catch (err) {
+      wsLogger.error("Error closing WebSocketServer", err);
+    }
+    wssInstance = null;
+  }
+
+  if (serverInstance) {
+    await new Promise<void>((resolve) => {
+      serverInstance?.close(() => resolve());
+    });
+    serverInstance = null;
+  }
+
+  try {
+    await closeRedisClients();
+  } catch (err) {
+    wsLogger.error("Error closing Redis clients", err);
+  }
+
+  wsLogger.info("WebSocket server and Redis connections terminated cleanly");
 }

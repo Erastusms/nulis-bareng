@@ -7,6 +7,7 @@ import {
   type SubscribedMessage,
   type UnsubscribedMessage,
 } from "@/lib/realtime/events";
+import { redisSubscriber, RedisSubscriber } from "../redis";
 import { authenticateWebSocket, authorizeWorkspaceSubscription } from "./auth";
 import { connectionManager, ConnectionManager } from "./connection-manager";
 import { roomManager, RoomManager } from "./room-manager";
@@ -15,20 +16,48 @@ import { wsLogger } from "./logger";
 export interface CreateWebSocketServerOptions extends ServerOptions {
   connManager?: ConnectionManager;
   rooms?: RoomManager;
+  subscriber?: RedisSubscriber;
 }
 
 /**
  * Creates and initializes a WebSocket Server instance with full authentication,
- * room routing, message validation, and lifecycle management.
+ * room routing, message validation, and dynamic Redis Pub/Sub integration.
  */
 export function createWebSocketServer(options: CreateWebSocketServerOptions = {}): WebSocketServer {
   const {
     connManager = connectionManager,
     rooms = roomManager,
+    subscriber = redisSubscriber,
     ...wsOptions
   } = options;
 
+  // 1. Wire dynamic Redis Pub/Sub subscription hooks into RoomManager
+  if (subscriber) {
+    rooms.setHooks({
+      onFirstSubscriber: (workspaceId) => {
+        subscriber.subscribeToWorkspace(workspaceId);
+      },
+      onLastSubscriberLeft: (workspaceId) => {
+        subscriber.unsubscribeFromWorkspace(workspaceId);
+      },
+    });
+
+    // Route incoming distributed Redis events to local WebSocket rooms
+    subscriber.onMessage((workspaceId, event) => {
+      rooms.broadcastToRoom(workspaceId, event);
+    });
+  }
+
   const wss = new WebSocketServer(wsOptions);
+
+  wss.on("error", (err: unknown) => {
+    const errorWithCode = err as { code?: string };
+    if (errorWithCode.code === "EADDRINUSE") {
+      wsLogger.info("WebSocketServer port already in use, skipping attachment");
+    } else {
+      wsLogger.error("WebSocketServer error", err);
+    }
+  });
 
   wss.on("connection", async (socket: WebSocket, req: IncomingMessage) => {
     // 1. Authenticate the connecting client
@@ -166,15 +195,21 @@ export function createWebSocketServer(options: CreateWebSocketServerOptions = {}
     });
   });
 
-  wsLogger.info("WebSocket Server initialized");
+  wsLogger.info("WebSocket Server initialized with Redis Pub/Sub support");
 
   return wss;
 }
 
 /**
- * Gracefully shuts down a WebSocketServer instance.
+ * Gracefully shuts down a WebSocketServer instance and clears room states.
  */
-export async function closeWebSocketServer(wss: WebSocketServer): Promise<void> {
+export async function closeWebSocketServer(
+  wss: WebSocketServer,
+  subscriber?: RedisSubscriber
+): Promise<void> {
+  if (subscriber) {
+    await subscriber.close();
+  }
   return new Promise<void>((resolve, reject) => {
     wss.close((err) => {
       if (err) reject(err);

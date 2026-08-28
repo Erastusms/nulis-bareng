@@ -1,18 +1,18 @@
-import { initWebSocketServer } from "../src/server/websocket/standalone-init";
+import { initWebSocketServer, stopWebSocketServer } from "../src/server/websocket/standalone-init";
 import { wsLogger } from "../src/server/websocket/logger";
 
-const server = initWebSocketServer();
+initWebSocketServer();
 
-process.on("SIGTERM", () => {
-  wsLogger.info("SIGTERM received, shutting down WebSocket server...");
-  server?.close(() => {
+const handleShutdown = async (signal: string) => {
+  wsLogger.info(`${signal} received, shutting down WebSocket server and Redis connections...`);
+  try {
+    await stopWebSocketServer();
     process.exit(0);
-  });
-});
+  } catch (err) {
+    wsLogger.error("Error during graceful shutdown", err);
+    process.exit(1);
+  }
+};
 
-process.on("SIGINT", () => {
-  wsLogger.info("SIGINT received, shutting down WebSocket server...");
-  server?.close(() => {
-    process.exit(0);
-  });
-});
+process.on("SIGTERM", () => handleShutdown("SIGTERM"));
+process.on("SIGINT", () => handleShutdown("SIGINT"));

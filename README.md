@@ -74,7 +74,13 @@ nulis-bareng/
 npm install
 ```
 
-### 3. Environment Configuration
+### 3. Environment & Local Infrastructure
+
+Start PostgreSQL and Redis using Docker Compose:
+
+```bash
+docker compose up -d
+```
 
 Copy `.env.example` to `.env.local`:
 

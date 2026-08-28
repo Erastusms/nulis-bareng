@@ -396,3 +396,68 @@ Upon disconnection, the client enters `reconnecting` status and attempts automat
 
 ### 7.3 Automatic Re-subscription
 The client tracks active room subscriptions. Once a connection is re-established, it automatically transmits `subscribe` messages for all previously active workspace rooms.
+
+---
+
+## 8. Multi-Instance Horizontal Scaling (Redis Pub/Sub)
+
+To support multiple backend instances behind a load balancer, `NulisBareng` employs **Redis Pub/Sub** as a high-performance cross-instance message broker.
+
+```text
+                    Load Balancer
+                   /             \
+              API #1            API #2
+                │                  │
+          WebSocket A        WebSocket B
+                │                  │
+                └──────┐    ┌──────┘
+                       │    │
+                       ▼    ▼
+                    Redis Pub/Sub
+                         │
+                         ▼
+                    PostgreSQL (Source of Truth)
+```
+
+### 8.1 Responsibilities & Isolation
+- **PostgreSQL**: The single source of truth for persistent entity records. Domain events are published *only* after database transactions successfully commit.
+- **Redis Pub/Sub**: Ephemeral message transport. Redis does NOT store persistent workspace state.
+- **WebSocket Server**: Delivers events to authenticated, connected clients.
+
+### 8.2 Channel Naming Scheme
+All Redis channels are workspace-scoped:
+```text
+workspace:{workspaceId}
+```
+*Example:* `workspace:cly893jd00001`
+
+### 8.3 Cross-Instance Event Envelope
+Internal Redis messages wrap the domain event inside a typed envelope with routing metadata:
+```json
+{
+  "eventId": "e9a03b57-6fcb-4c07-bca9-0268ecf931d8",
+  "type": "card.created",
+  "workspaceId": "ws_123",
+  "sourceInstanceId": "api-instance-1",
+  "timestamp": "2026-08-25T08:30:00.000Z",
+  "version": 1724574600000,
+  "payload": {
+    "eventId": "e9a03b57-6fcb-4c07-bca9-0268ecf931d8",
+    "type": "card.created",
+    "workspaceId": "ws_123",
+    "boardId": "board_456",
+    "columnId": "col_789",
+    "cardId": "card_001",
+    "card": { ... },
+    "version": 1724574600000,
+    "timestamp": "2026-08-25T08:30:00.000Z"
+  }
+}
+```
+
+### 8.4 Dynamic Channel Subscriptions
+Each backend instance manages dynamic Redis channel subscriptions based on active local WebSocket connections:
+1. When the **first** local client subscribes to `workspace:123`, the instance issues `SUBSCRIBE workspace:123` to Redis.
+2. When subsequent local clients subscribe to the same workspace, no additional Redis subscriptions are created.
+3. When the **last** local client leaves `workspace:123`, the instance issues `UNSUBSCRIBE workspace:123`.
+4. Upon Redis reconnection, the subscriber automatically re-subscribes to all currently active workspace channels.
