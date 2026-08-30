@@ -1,5 +1,6 @@
 import type Redis from "ioredis";
 import type { RealtimeDomainEvent } from "@/lib/realtime/events";
+import { metrics } from "../observability/metrics";
 import { getRedisPublisherClient, getInstanceId } from "./redis-client";
 import {
   createRedisEnvelope,
@@ -58,6 +59,7 @@ export class RedisPublisher implements IEventPublisher {
       }
 
       await client.publish(channel, serialized);
+      metrics.recordRedisPublish(true);
 
       redisLogger.info(`Published event ${event.type} to ${channel}`, {
         eventId: event.eventId,
@@ -66,6 +68,7 @@ export class RedisPublisher implements IEventPublisher {
       });
       return true;
     } catch (err) {
+      metrics.recordRedisPublish(false);
       redisLogger.error(`Redis publish failed for event ${event.type} on ${channel}`, err, {
         eventId: event.eventId,
         workspaceId: event.workspaceId,

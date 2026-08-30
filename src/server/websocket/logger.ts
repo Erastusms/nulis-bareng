@@ -1,3 +1,6 @@
+import { sanitizeLogData } from "../observability/logger";
+import { getRequestContext } from "../observability/request-context";
+
 export type LogLevel = "debug" | "info" | "warn" | "error";
 
 interface LogPayload {
@@ -11,7 +14,22 @@ interface LogPayload {
 class WebSocketLogger {
   private format(level: LogLevel, message: string, meta?: LogPayload): string {
     const timestamp = new Date().toISOString();
-    const metaStr = meta ? ` ${JSON.stringify(meta)}` : "";
+    const context = getRequestContext();
+    const sanitizedMeta = meta ? (sanitizeLogData(meta) as LogPayload) : {};
+    const requestId = (sanitizedMeta.requestId as string) || context?.requestId;
+
+    if (process.env.NODE_ENV === "production" || process.env.LOG_FORMAT === "json") {
+      return JSON.stringify({
+        timestamp,
+        level,
+        component: "websocket",
+        message,
+        ...(requestId && { requestId }),
+        ...sanitizedMeta,
+      });
+    }
+
+    const metaStr = Object.keys(sanitizedMeta).length > 0 ? ` ${JSON.stringify(sanitizedMeta)}` : "";
     return `[WebSocket] [${timestamp}] [${level.toUpperCase()}] ${message}${metaStr}`;
   }
 
@@ -33,7 +51,9 @@ class WebSocketLogger {
     const errorDetails =
       error instanceof Error
         ? { errorMessage: error.message, errorName: error.name }
-        : { rawError: String(error) };
+        : error !== undefined
+          ? { rawError: String(error) }
+          : {};
     console.error(this.format("error", message, { ...meta, ...errorDetails }));
   }
 }

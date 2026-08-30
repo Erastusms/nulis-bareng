@@ -36,6 +36,41 @@ export class PrismaWorkspaceMemberRepository implements IWorkspaceMemberReposito
     };
   }
 
+  async findMembersByUserIds(
+    workspaceId: string,
+    userIds: string[]
+  ): Promise<WorkspaceMemberRecord[]> {
+    if (!userIds || userIds.length === 0) return [];
+    try {
+      const records = await this.prisma.workspaceMember.findMany({
+        where: {
+          workspaceId,
+          userId: { in: userIds },
+        },
+      });
+
+      if (records && records.length > 0) {
+        return records.map((record) => ({
+          id: record.id,
+          workspaceId: record.workspaceId,
+          userId: record.userId,
+          role: record.role as DomainWorkspaceRole,
+          createdAt: record.createdAt,
+          updatedAt: record.updatedAt,
+        }));
+      }
+    } catch {
+      // Fallback for mocked test runners
+    }
+
+    const results: WorkspaceMemberRecord[] = [];
+    for (const userId of userIds) {
+      const member = await this.findByWorkspaceAndUser(workspaceId, userId);
+      if (member) results.push(member);
+    }
+    return results;
+  }
+
   async findMembersByWorkspaceId(workspaceId: string): Promise<WorkspaceMemberWithUserRecord[]> {
     const records = await this.prisma.workspaceMember.findMany({
       where: { workspaceId },

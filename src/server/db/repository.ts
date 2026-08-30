@@ -262,6 +262,7 @@ export interface IWorkspaceRepository {
 export interface IWorkspaceMemberRepository {
   findByWorkspaceAndUser(workspaceId: string, userId: string): Promise<WorkspaceMemberRecord | null>;
   findMembersByWorkspaceId(workspaceId: string): Promise<WorkspaceMemberWithUserRecord[]>;
+  findMembersByUserIds?(workspaceId: string, userIds: string[]): Promise<WorkspaceMemberRecord[]>;
   create(data: CreateWorkspaceMemberData): Promise<WorkspaceMemberRecord>;
   updateRole(workspaceId: string, userId: string, role: WorkspaceRole): Promise<WorkspaceMemberRecord>;
   delete(workspaceId: string, userId: string): Promise<boolean>;

@@ -11,6 +11,8 @@ import {
   type UnsubscribedMessage,
 } from "@/lib/realtime/events";
 import { workspaceMemberRepository } from "@/server/db/repositories/workspace-member.repository";
+import { appLogger } from "../observability/logger";
+import { metrics } from "../observability/metrics";
 import { presenceService as defaultPresenceService, PresenceService, redisSubscriber, RedisSubscriber } from "../redis";
 import { eventPublisher as defaultEventPublisher, IEventPublisher } from "./event-publisher";
 import { authenticateWebSocket, authorizeWorkspaceSubscription } from "./auth";
@@ -69,9 +71,16 @@ export function createWebSocketServer(options: CreateWebSocketServerOptions = {}
   });
 
   wss.on("connection", async (socket: WebSocket, req: IncomingMessage) => {
+    metrics.recordWsConnectionAttempt();
+
     // 1. Authenticate the connecting client
     const user = await authenticateWebSocket(req);
     if (!user) {
+      metrics.recordWsConnectionRejected();
+      appLogger.warn("websocket.authorization.failed", {
+        meta: { reason: "unauthorized_connection_attempt" },
+      });
+
       const errorMsg: ErrorMessage = {
         type: "error",
         code: "UNAUTHORIZED",
@@ -86,8 +95,30 @@ export function createWebSocketServer(options: CreateWebSocketServerOptions = {}
       return;
     }
 
+    // Check if this is a reconnect
+    const existingUserConns =
+      connManager.getConnectionsByUserId?.(user.id) ||
+      connManager.getUserConnections?.(user.id) ||
+      [];
+    if (existingUserConns.length > 0) {
+      metrics.recordWsReconnect();
+    }
+
     // 2. Register connection & initial presence
     const clientConn = connManager.addConnection(socket, user);
+    metrics.recordWsConnectionSuccess();
+    const activeCount =
+      connManager.getConnectionCount?.() ?? connManager.getActiveCount?.() ?? 1;
+    metrics.setWsActiveConnections(activeCount);
+
+    appLogger.info("websocket.connected", {
+      userId: user.id,
+      meta: {
+        connectionId: clientConn.id,
+        activeConnections: activeCount,
+      },
+    });
+
     await presence.setUserOnline(user.id, clientConn.id, "ONLINE").catch((err) => {
       wsLogger.error("Failed to register presence on connection", err, { userId: user.id });
     });
@@ -126,6 +157,10 @@ export function createWebSocketServer(options: CreateWebSocketServerOptions = {}
         }
 
         const message = parseResult.data;
+        appLogger.debug("websocket.event.received", {
+          userId: user.id,
+          meta: { messageType: message.type },
+        });
 
         // Route message by type
         if (message.type === "ping") {
@@ -179,6 +214,12 @@ export function createWebSocketServer(options: CreateWebSocketServerOptions = {}
         if (message.type === "subscribe") {
           const authResult = await authorizeWorkspaceSubscription(user.id, message.workspaceId);
           if (!authResult.authorized || !authResult.workspaceId) {
+            appLogger.warn("websocket.authorization.failed", {
+              userId: user.id,
+              workspaceId: message.workspaceId,
+              meta: { reason: "workspace_subscription_forbidden" },
+            });
+
             const forbiddenErr: ErrorMessage = {
               type: "error",
               code: "FORBIDDEN",
@@ -273,7 +314,27 @@ export function createWebSocketServer(options: CreateWebSocketServerOptions = {}
     });
 
     // 4. Disconnection & error handling
-    const cleanup = async () => {
+    let isCleanedUp = false;
+    const cleanup = async (reason = "normal") => {
+      if (isCleanedUp) return;
+      isCleanedUp = true;
+
+      metrics.recordWsDisconnect(reason);
+      const remainingCount = Math.max(
+        0,
+        (connManager.getConnectionCount?.() ?? connManager.getActiveCount?.() ?? 1) - 1
+      );
+      metrics.setWsActiveConnections(remainingCount);
+
+      appLogger.info("websocket.disconnected", {
+        userId: user.id,
+        meta: {
+          connectionId: clientConn.id,
+          reason,
+          activeConnections: remainingCount,
+        },
+      });
+
       const subscribedWorkspaces = Array.from(clientConn.subscribedWorkspaces);
       rooms.leaveAll(socket, connManager);
       connManager.removeConnection(socket);
@@ -303,13 +364,13 @@ export function createWebSocketServer(options: CreateWebSocketServerOptions = {}
       }
     };
 
-    socket.on("close", cleanup);
+    socket.on("close", () => cleanup("normal"));
     socket.on("error", (err) => {
       wsLogger.error("WebSocket client socket error", err, {
         connectionId: clientConn.id,
         userId: user.id,
       });
-      cleanup();
+      cleanup("socket_error");
     });
   });
 
@@ -319,7 +380,6 @@ export function createWebSocketServer(options: CreateWebSocketServerOptions = {}
 }
 
 /**
-
  * Gracefully shuts down a WebSocketServer instance and clears room states.
  */
 export async function closeWebSocketServer(

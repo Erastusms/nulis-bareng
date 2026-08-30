@@ -101,6 +101,19 @@ export class BoardAuthorizationService {
   }
 
   /**
+   * Validates that columns exist and belong to the specified board without re-verifying workspace auth.
+   */
+  async validateColumnsInBoard(columnIds: string[], boardId: string): Promise<void> {
+    const uniqueIds = Array.from(new Set(columnIds));
+    for (const columnId of uniqueIds) {
+      const column = await this.columnRepo.findById(columnId);
+      if (!column || column.boardId !== boardId) {
+        throw new NotFoundError("Column", columnId);
+      }
+    }
+  }
+
+  /**
    * Validates that the card exists and belongs to the specified board and workspace.
    */
   async requireCardInBoard(
@@ -143,15 +156,32 @@ export class BoardAuthorizationService {
     const actualWorkspaceId = workspace ? workspace.id : workspaceIdOrIdentifier;
 
     const uniqueIds = Array.from(new Set(assigneeIds));
-    for (const memberId of uniqueIds) {
-      const member = await this.memberRepo.findByWorkspaceAndUser(
+
+    // Batch query member memberships in a single query
+    if (this.memberRepo.findMembersByUserIds) {
+      const members = await this.memberRepo.findMembersByUserIds(
         actualWorkspaceId,
-        memberId
+        uniqueIds
       );
-      if (!member) {
-        throw new ValidationError(
-          `User '${memberId}' is not an active member of this workspace and cannot be assigned to the card.`
+      const foundUserIds = new Set(members.map((m) => m.userId));
+      for (const memberId of uniqueIds) {
+        if (!foundUserIds.has(memberId)) {
+          throw new ValidationError(
+            `User '${memberId}' is not an active member of this workspace and cannot be assigned to the card.`
+          );
+        }
+      }
+    } else {
+      for (const memberId of uniqueIds) {
+        const member = await this.memberRepo.findByWorkspaceAndUser(
+          actualWorkspaceId,
+          memberId
         );
+        if (!member) {
+          throw new ValidationError(
+            `User '${memberId}' is not an active member of this workspace and cannot be assigned to the card.`
+          );
+        }
       }
     }
   }

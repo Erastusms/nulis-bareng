@@ -1,5 +1,6 @@
 import type Redis from "ioredis";
 import type { RealtimeDomainEvent } from "@/lib/realtime/events";
+import { metrics } from "../observability/metrics";
 import { getRedisSubscriberClient } from "./redis-client";
 import {
   deserializeRedisEnvelope,
@@ -136,7 +137,7 @@ export class RedisSubscriber {
   }
 
   /**
-   * Processes incoming raw Redis messages.
+   * Processes incoming raw Redis messages and measures propagation latency.
    */
   private handleIncomingMessage(channel: string, rawPayload: string): void {
     const envelope = deserializeRedisEnvelope(rawPayload);
@@ -148,10 +149,19 @@ export class RedisSubscriber {
     const workspaceId =
       getWorkspaceIdFromChannel(channel) || envelope.workspaceId;
 
+    const publishedAt = new Date(envelope.timestamp).getTime();
+    const propagationLatencyMs =
+      !isNaN(publishedAt) && publishedAt > 0
+        ? Math.max(0, Date.now() - publishedAt)
+        : undefined;
+
+    metrics.recordRedisMessageReceived(propagationLatencyMs);
+
     redisLogger.info(`Received event ${envelope.type} from ${channel}`, {
       eventId: envelope.eventId,
       workspaceId,
       sourceInstanceId: envelope.sourceInstanceId,
+      ...(propagationLatencyMs !== undefined && { propagationLatencyMs }),
     });
 
     for (const handler of this.messageHandlers) {

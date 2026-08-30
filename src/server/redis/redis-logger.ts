@@ -1,3 +1,6 @@
+import { sanitizeLogData } from "../observability/logger";
+import { getRequestContext } from "../observability/request-context";
+
 export type RedisLogLevel = "debug" | "info" | "warn" | "error";
 
 interface LogPayload {
@@ -11,7 +14,22 @@ interface LogPayload {
 class RedisLogger {
   private format(level: RedisLogLevel, message: string, meta?: LogPayload): string {
     const timestamp = new Date().toISOString();
-    const metaStr = meta ? ` ${JSON.stringify(meta)}` : "";
+    const context = getRequestContext();
+    const sanitizedMeta = meta ? (sanitizeLogData(meta) as LogPayload) : {};
+    const requestId = (sanitizedMeta.requestId as string) || context?.requestId;
+
+    if (process.env.NODE_ENV === "production" || process.env.LOG_FORMAT === "json") {
+      return JSON.stringify({
+        timestamp,
+        level,
+        component: "redis",
+        message,
+        ...(requestId && { requestId }),
+        ...sanitizedMeta,
+      });
+    }
+
+    const metaStr = Object.keys(sanitizedMeta).length > 0 ? ` ${JSON.stringify(sanitizedMeta)}` : "";
     return `[Redis] [${timestamp}] [${level.toUpperCase()}] ${message}${metaStr}`;
   }
 

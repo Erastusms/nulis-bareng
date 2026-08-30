@@ -109,6 +109,14 @@ export class ConnectionManager {
     return this.connections.size;
   }
 
+  getActiveCount(): number {
+    return this.connections.size;
+  }
+
+  getUserConnections(userId: string): ClientConnection[] {
+    return this.getConnectionsByUserId(userId);
+  }
+
   /**
    * Clears all connection records (useful for testing or server shutdown).
    */

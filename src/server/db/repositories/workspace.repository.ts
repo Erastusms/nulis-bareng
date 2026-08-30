@@ -88,11 +88,36 @@ export class PrismaWorkspaceRepository implements IWorkspaceRepository {
   }
 
   async findByIdOrUrlIdentifier(identifier: string): Promise<WorkspaceRecord | null> {
-    const byId = await this.findById(identifier);
-    if (byId) return byId;
-    const byUrl = await this.findByUrlIdentifier(identifier);
-    if (byUrl) return byUrl;
-    return this.findBySlug(identifier);
+    const clean = identifier.trim();
+    const lower = clean.toLowerCase();
+    const record = await this.prisma.workspace.findFirst({
+      where: {
+        OR: [
+          { id: clean },
+          { urlIdentifier: lower },
+          { slug: lower },
+        ],
+      },
+      include: {
+        _count: {
+          select: { members: true },
+        },
+      },
+    });
+
+    if (!record) return null;
+
+    return {
+      id: record.id,
+      name: record.name,
+      slug: record.slug,
+      urlIdentifier: record.urlIdentifier,
+      description: record.description,
+      ownerId: record.ownerId,
+      createdAt: record.createdAt,
+      updatedAt: record.updatedAt,
+      memberCount: record._count.members,
+    };
   }
 
   async findByUserId(userId: string): Promise<(WorkspaceRecord & { role: DomainWorkspaceRole })[]> {

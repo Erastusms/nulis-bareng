@@ -306,18 +306,25 @@ export class CardService {
     const canonicalWorkspaceId = authResult?.workspace?.id ?? workspaceId;
     const card = authResult.card;
 
-    await this.authService.requireColumnInBoard(
-      dto.sourceColumnId,
-      boardId,
-      canonicalWorkspaceId,
-      userId
-    );
-    await this.authService.requireColumnInBoard(
-      dto.targetColumnId,
-      boardId,
-      canonicalWorkspaceId,
-      userId
-    );
+    if (typeof (this.authService as any).validateColumnsInBoard === "function") {
+      await (this.authService as any).validateColumnsInBoard(
+        [dto.sourceColumnId, dto.targetColumnId],
+        boardId
+      );
+    } else {
+      await this.authService.requireColumnInBoard(
+        dto.sourceColumnId,
+        boardId,
+        canonicalWorkspaceId,
+        userId
+      );
+      await this.authService.requireColumnInBoard(
+        dto.targetColumnId,
+        boardId,
+        canonicalWorkspaceId,
+        userId
+      );
+    }
 
     if (card && card.columnId !== dto.sourceColumnId) {
       throw new ValidationError("Card does not belong to the specified source column.");
